@@ -21,46 +21,105 @@ cf_fail_examples = []
 cp_examples = []
 cp_fail_examples = []
 
+
+def ToNote12(sequence):
+    forexample:
+        assert(e[1] is not None)
+        '''check if cf is note7'''
+        if e[0]:
+            length = len(e[1])
+            s = e[1]
+            for i in range(0, length):
+                s[i] = Note.diatonicScale(0, s[i])
+
+
+class Example:
+    def __init__(self, sequence, note7=True, failures):
+        assert(seq is not None)
+        if note7:
+            self.sequence = []
+            length = len(seq)
+            for i in range(0, length):
+                self.append(Note.diatonicScale(0, sequence[i]))
+        else:
+            self.sequence = sequence
+        self.failures = failures
+
+
 note7, seq = True, [0, 2, 1, 0, 3, 2, 4, 3, 2, 1, 0]
-standard = (note7, seq)
+standard = Example(sequence=seq, note7=True, failures=None)
 cf_examples.append(standard)
+
 note7, seq = True, [1, 5, 4, 3, 2, 1, 3, 2, 1]
-dorico = (note7, seq)
+dorico = Example(sequence=seq, note7=True, failures=None)
 cf_examples.append(dorico)
+
 note7, seq = True, [2, 0, 1, 0, -2, 5, 2, 3, 2]
-frigio = (note7, seq)
+frigio = Example(sequence=seq, note7=True, failures=None)
 cf_examples.append(frigio)
+
 note7, seq = True, [2, -2, 5, 4, 3, 2, 0, 3, 2]
-frigio2 = (note7, 7)
+frigio2 = Example(sequence=seq, note7=True, failures=None)
 cf_examples.append(frigio2)
+
 note7, seq = True, [2, -2, -1, 0, 1, 2, 3, 1, 4, 3, 2]
-frigio3 = (note7, seq)
+frigio3 = Example(sequence=seq, note7=True, failures=None)
 cf_examples.append(frigio3)
+
 note7, seq = True, [-3, 1, 0, -2, -1, 0, -1, -2, -3]
-mixo = (note7, seq)
+mixo = Example(sequence=seq, note7=True, failures=None)
 cf_examples.append(mixo)
+
+'''failure cases'''
+f_parallel5 = 'p5'
+f_direct5 = 'd5'
+f_repeated_note = 'R'
+f_tritone = 'ag4'
+f_middle_tritone = 'mTR'
+f_isolated_tritone = 'iTR'
+f_bad_ending = 'E'
+f_sixthM = '6M'
+f_badJump = 'j'
+f_seq = 'SQ'
+f_pairs = 'ABAB'
+
 note7, seq = True, [c, c]
-repeatedNote = (note7, seq)
+failures = [(repeated_note, 1)]
+repeatedNote = Example(sequence=seq, note7=True, failures)
 cf_fail_examples.append(repeatedNote)
+
 note7, seq = True, [f, b, f + 7, b, f, b - 7]
-tritone = (note7, seq)
+for in range(1, 6):
+    fail.append(f_tritone, i)
+tritone = Example(sequence=seq, note7=True, fail)
 cf_fail_examples.append(tritone)
+
 note7, seq = True, [4, 3, 4, 5, 6, 5]
-mTritone = (note7, seq)
+failures = [(f_middle_tritone, 5)]
+mTritone = Example(sequence=seq, note7=True, failures)
 cf_fail_examples.append(mTritone)
+
 note7, seq = True, [2, 3, 2, 1, 0, -1, 0]
-mTritone2 = (note7, seq)
+failures = [(f_middle_tritone, 6)]
+mTritone2 = Example(sequence=seq, note7=True, failures)
 cf_fail_examples.append(mTritone2)
+
 note7, seq = True, [0, 2, 1, 0, 3, 2, 4, 3, 2, -1, 0]
-badEnding = (note7, seq)
+failures = [(f_bad_ending, len(seq) - 1)]
+badEnding = Example(sequence=seq, note7=True, failures)
 cf_fail_examples.append(badEnding)
+
 note7, seq = False, [2, 7, 5, 9, 11, 12, 11, 12, 9, 4, 2]
-sequences = (note7, seq)
+failures = [(f_seq, 3), (f_seq)]
+sequences = Example(sequence=seq, note7=True, failures)
 cf_fail_examples.append(sequences)
+
 note7, seq = False, [2, 9, 11, 2, 4, 2]
-sixthM = (note7, seq)
+sixthM = Example(sequence=seq, note7=True, failures)
 cf_fail_examples.append(sixthM)
-badJump = (False, [2, 4, 5, 4])
+
+note7, seq = False, [2, 4, 5, 4]
+badJump = Example(sequence=seq, note7=True, failures)
 cf_fail_examples.append(badJump)
 
 
@@ -78,56 +137,10 @@ parallelFifth.append(example[1] + 7)
 parallel_5 = NodeFromSequence(parallelFifth, 0)
 
 
-
-
-
-
-
-
-def ToNote12(examples):
-    for e in examples:
-        assert(e[1] is not None)
-        '''check if cf is note7'''
-        if e[0]:
-            length = len(e[1])
-            s = e[1]
-            for i in range(0, length):
-                s[i] = Note.diatonicScale(0, s[i])
-        e.reverse()
-
-
 ToNote12(cf_examples)
 ToNote12(cf_fail_examples)
 ToNote12(cp_examples)
 ToNote12(cp_fail_examples)
-
-
-
-
-if cf_reference[1] == 7:
-    '''convertimos de note7 a note12'''
-    cf = cf_reference[0]
-    for i in range(0, len(example)):
-        value = example[i]
-        example[i] = Note.diatonicScale(0, value)
-
-
-
-
-
-
-
-#
-
-#
-
-
-#
-# for i in range(0, len(failExample)):
-#     value = failExample[i]
-#     failExample[i] = Note.diatonicScale(0, value)
-#     value = failExample[i]
-    # print(Note(value % 12))
 
 
 testNotes = testExample = testFailExample = testFailCounter = False
@@ -171,28 +184,28 @@ class TestCases(unittest.TestCase):
                 print(Note((-i) % 12).name + str(-i//12))
                 print(Diatonic.interval(0, -i))
 
-    def test_example(self):
-        print('testing cf')
-        s = example
-        s.reverse()
-        for i in range(0, len(s)):
-            if i == 0:
-                node = Node(s[0])
-            else:
-                node = Node(s[i], node)
-            valid = node.validMelody(len(s))
-            if not valid:
-                print('invalid ' + str(node.sequence))
-            assert(valid)
-            print('sequence passed')
+    def test_cf_examples(self):
+        print('testing cf examples')
+        for e in cf_examples:
+            node = Node.FromSequence(sequence, 0, isCantus=False)
+            s = node.sequence
+            for i in range(0, len(s)):
+                if node
+                if i == 0:
+                    node = Node(s[0])
+                else:
+                    node = Node(s[i], node)
+                valid = node.validMelody(len(s))
+                if not valid:
+                    print('invalid ' + str(node.sequence))
+                assert(valid)
+                print('sequence passed')
 
     def testFail(self):
-        if testFailExample:
+        print('testing cf fail examples')
+        for e in cf_fail_examples:
             print('testing Fail')
-            s = failExample
-            s.reverse()
-            print(failExample)
-
+            s = e[1]
             valid = True
             for i in range(0, len(s)):
                 if i == 0:

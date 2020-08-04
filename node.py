@@ -1,6 +1,12 @@
 from Note import Note, Diatonic
 
 
+'''haciendo el arbol al reves, index = 1,
+    representa penultima nota'''
+'''debe ser 2ndo grado en el cantusFirmus y sensible para
+contrapunto, sensible = modo - 1, en la escala cromatica y diat'''
+
+
 class Node:
     def __init__(self, note, lastNode=None):
         self.note = note
@@ -52,6 +58,10 @@ class Node:
         if self.index == 0:
             return None
         return self.sequence[self.index - 1]
+
+    def partial(self, n):
+        subSequence = self.sequence[0:n]
+        return Node.FromSequence(subSequence)
 
     def jump(self):
         if self.index == 0:
@@ -116,6 +126,53 @@ class Node:
             return False
         return True
 
+    def checkJumpEnd(self):
+        if self.index == 2 and self.jump() >= 7:
+            print('.jump down before end')
+            return False
+
+    def checkLegalJump(self, j):
+        if j > 1:
+            if j != 2 and j != 3 and j != 4 and j != 5 and j != 7:
+                print('salto ilegal '+str(j+1)+'a')
+                return False
+            j_chrome = self.note - self.parent
+            if self.parent - self.sequence[self.index - 2] > 2:
+                if not self.isChord():
+                    print(
+                        'salto en la misma direccion ,debe ser acorde')
+                    return False
+            if j == 5:
+                if abs(j_chrome) == 9:
+                    print('note, note - 6M')
+                    return False
+        elif j < -1:
+            if j != -2 and j != -3 and j != -4 and j != -5 and j != -7:
+                print('salto ilegal '+str(j))
+                return False
+            if self.parent - self.sequence[self.index - 2] < -2:
+                if not self.isChord():
+                    print('not chord')
+                    return False
+            if j == -5:
+                j_chrome = self.note - self.parent
+                if j_chrome == -9:
+                    print('note , note + 6M')
+                    return False
+
+    def checkTritoneIsolated(self, lastJump):
+        if self.jump() / lastJump < 0:
+            lastPivot = self.pivot
+            self.pivot = self.index - 1
+            if lastPivot is not None:
+                if (self.sequence[lastPivot] - self.parent) % 12 == 6:
+                    print(self.note)
+                    print(self.jump())
+                    print('surrounding tritone ' + str(self.parent))
+                    self.pivot = self.index - 1
+                    return False
+        return True
+
     def validMelody(self, size=11, counter=False, mode=None):
         index = self.index
         note = self.note
@@ -129,103 +186,55 @@ class Node:
                 elif index >= 2 and self.sequence[index - 2] == note:
                     print('AAA AT COUNTER')
                     return False
-            '''haciendo el arbol al reves, index = 1,
-                representa penultima nota'''
-            '''debe ser 2ndo grado en el cantusFirmus y sensible para
-            contrapunto, sensible = modo - 1, en la escala cromatica y diat'''
-            if index == 1:
-                if not self.checkEnd(index, note, counter, mode):
-                    print('invalid ending '+str(self.sequence))
-                    return False
+
+            if index == 1 and not self.checkEnd(index, note, counter, mode):
+                print('invalid ending '+str(self.sequence))
+                return False
             if not self.checkTritone(note):
                 print('tritone movement')
                 return False
-            if index >= 2:
-                lastJump = self.sequence[index - 1] - self.sequence[index - 2]
-                if lastJump != 0:
-                    if self.jump() / lastJump < 0:
-                        lastPivot = self.pivot
-                        self.pivot = index - 1
-                        if lastPivot is not None:
-                            if (self.sequence[lastPivot] - self.parent) % 12 == 6:
-                                print(note)
-                                print(self.jump())
-                                print('surrounding tritone ' + str(self.parent))
-                                self.pivot = index - 1
-                                return False
-
-                if index == 2 and self.jump() >= 7:
-                    print('.jump down before end')
-                    return False
-                ''''index in whiteScale'''
-                note = Diatonic.index(note)
-                parent = Diatonic.index(self.parent)
-                print('parent is: ' + str(parent))
-                print('note is: ' + str(note))
-                print(self.note)
-                '''salto en terminos de blancas , intervalos diatonicos'''
-                j = note - parent
-                if j > 1:
-                    if j != 2 and j != 3 and j != 4 and j != 5 and j != 7:
-                        print('salto ilegal '+str(j+1)+'a')
-                        return False
-                    j_chrome = self.note - self.parent
-                    if self.parent - self.sequence[index - 2] > 2:
-                        if not self.isChord():
-                            print(
-                                'salto en la misma direccion ,debe ser acorde')
-                            return False
-                    if j == 5:
-                        if abs(j_chrome) == 9:
-                            print('note, note - 6M')
-                            return False
-                elif j < -1:
-                    if j != -2 and j != -3 and j != -4 and j != -5 and j != -7:
-                        print('salto ilegal '+str(j))
-                        return False
-                    if self.parent - self.sequence[index - 2] < -2:
-                        if not self.isChord():
-                            print('not chord')
-                            return False
-                    if j == -5:
-                        j_chrome = self.note - self.parent
-                        if j_chrome == -9:
-                            print('note , note + 6M')
-                            return False
-            if index >= 3:
-                note = self.note
-                jump = Diatonic.interval(self.parent, note)
-                seq = self.sequence
-                if not self.checkMovement(jump, seq, index):
-                    print(jump)
-                    print('note' + str(self.note))
-                    print(self.sequence)
-                    print(Diatonic.index(note))
-                    print('invalid movement')
-                    return False
-                if not self.checkSequences(seq, index):
-                    print('sequences found')
-                    return False
-                if index == size - 1 and not self.checkStart(counter, mode):
-                    print('invalid start')
-                    return False
+            if index < 2:
+                return True
+            lastJump = self.sequence[index - 1] - self.sequence[index - 2]
+            if lastJump != 0 and not self.checkTritoneIsolated(lastJump):
+                print('isolated tritone')
+                return False
+            if not self.checkJumpEnd():
+                return False
+            j = Diatonic.index(note) - Diatonic.index(self.parent)
+            if j != 0 and not self.checkLegalJump(j):
+                print('illegal jump')
+                return False
+            if index < 3:
+                return True
+            jump = Diatonic.interval(self.parent, self.note)
+            seq = self.sequence
+            if not self.checkMovement(jump, seq, index):
+                print('invalid movement')
+                return False
+            if not self.checkSequences(seq, index):
+                print('sequences found')
+                return False
+            if index == size - 1 and not self.checkStart(counter, mode):
+                print('invalid start')
+                return False
 
         return True
 
     def checkMovement(self, jump, seq, index):
         j = Diatonic.interval(seq[index - 2], seq[index - 1])
-        print('check movement '+ str(self.note))
+        print('check movement {}'.format(self.note))
         if j == 1 and jump > 1:
-            parent = str(self.parent)
-            note = str(self.note)
-            p = str(seq[index - 2])
-            print('jump down + continuos ' + note + ' ' + parent + ' ' + p)
+            parent = self.parent
+            note = self.note
+            p = seq[index - 2]
+            print('{} {} {}: jump down + continuos '.format(note, parent, p))
             return False
         elif jump == -1 and j < -1:
-            print(index)
-            print(self.note)
-            print(self.jump())
-            print('continous + jumpUp')
+            parent = self.parent
+            note = self.note
+            p = seq[index - 2]
+            print('{} {} {}: continous + jumpUp'.format(note, parent, p))
             return False
         return True
 
@@ -254,7 +263,6 @@ class Node:
                     print('abc , a+x b+x c+x')
                     return False
         return True
-
 
     def validateVoice1(self, cantusFirmus):
 
@@ -325,24 +333,9 @@ class Node:
         seq.reverse()
         arr = []
         for s in seq:
-            arr.append(Note(s%12).name + str(int(s/12)))
+            arr.append(Note(s % 12).name + str(int(s/12)))
         print(arr)
         print(seq)
-
-    def printNotesReverse(self):
-        seq = self.sequence
-        arr = []
-        for s in seq:
-            arr.append(Note(s%12).name)
-        print(arr)
-
-    @staticmethod
-    def interval(note1, note2):
-        note2 - note1
-
-    @staticmethod
-    def tritone(note1, note2):
-        return (note1 == 4 and note2 == 7) or (note1 == 7 and note2 == 4)
 
     @staticmethod
     def FromSequence(sequence, octaveShift, reverse=True, isCantus=False):
@@ -361,6 +354,6 @@ class Node:
                                          counter=not isCantus,
                                          mode=node.root)
             if not valid:
-                failures = failures + node.failures[i]
+                failures.append(node.failures[i])
         print(failures)
         return node
