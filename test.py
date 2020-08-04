@@ -1,7 +1,9 @@
 import unittest
+import random
 from node import Node
 from Note import Note, Diatonic
 import sys
+import os
 
 
 standardSequence = [0, 2, 1, 0, 3, 2, 4, 3, 2, 1, 0]
@@ -13,30 +15,104 @@ g = 4
 a = 5
 b = 6
 
-standard = [0, 2, 1, 0, 3, 2, 4, 3, 2, 1, 0]
-dorico = [1, 5, 4, 3, 2, 1, 3, 2, 1]
-frigio = [2, 0, 1, 0, -2, 5, 2, 3, 2]
-frigio2 = [2, -2, 5, 4, 3, 2, 0, 3, 2]
-frigio3 = [2, -2, -1, 0, 1, 2, 3, 1, 4, 3, 2]
-mixo = [-3, 1, 0, -2, -1, 0, -1, -2, -3]
-repeatedNote = [c, c]
-tritone = [f, b, f + 7, b, f, b - 7]
-mTritone = [4, 3, 4, 5, 6, 5]
-mTritone2 = [2, 3, 2, 1, 0, -1, 0]
-badEnding = [0, 2, 1, 0, 3, 2, 4, 3, 2, -1, 0]
-testSeq = [2, 7, 5, 9, 11, 12, 11, 12, 9, 4, 2]
-sixthM = [2, 9, 11, 2, 4, 2]
-badMovement = [2, 4, 5, 4, 9, 11, 12, 11, 9, 4, 2]
+cf_examples = []
+cf_fail_examples = []
+
+cp_examples = []
+cp_fail_examples = []
+
+note7, seq = True, [0, 2, 1, 0, 3, 2, 4, 3, 2, 1, 0]
+standard = (note7, seq)
+cf_examples.append(standard)
+note7, seq = True, [1, 5, 4, 3, 2, 1, 3, 2, 1]
+dorico = (note7, seq)
+cf_examples.append(dorico)
+note7, seq = True, [2, 0, 1, 0, -2, 5, 2, 3, 2]
+frigio = (note7, seq)
+cf_examples.append(frigio)
+note7, seq = True, [2, -2, 5, 4, 3, 2, 0, 3, 2]
+frigio2 = (note7, 7)
+cf_examples.append(frigio2)
+note7, seq = True, [2, -2, -1, 0, 1, 2, 3, 1, 4, 3, 2]
+frigio3 = (note7, seq)
+cf_examples.append(frigio3)
+note7, seq = True, [-3, 1, 0, -2, -1, 0, -1, -2, -3]
+mixo = (note7, seq)
+cf_examples.append(mixo)
+note7, seq = True, [c, c]
+repeatedNote = (note7, seq)
+cf_fail_examples.append(repeatedNote)
+note7, seq = True, [f, b, f + 7, b, f, b - 7]
+tritone = (note7, seq)
+cf_fail_examples.append(tritone)
+note7, seq = True, [4, 3, 4, 5, 6, 5]
+mTritone = (note7, seq)
+cf_fail_examples.append(mTritone)
+note7, seq = True, [2, 3, 2, 1, 0, -1, 0]
+mTritone2 = (note7, seq)
+cf_fail_examples.append(mTritone2)
+note7, seq = True, [0, 2, 1, 0, 3, 2, 4, 3, 2, -1, 0]
+badEnding = (note7, seq)
+cf_fail_examples.append(badEnding)
+note7, seq = False, [2, 7, 5, 9, 11, 12, 11, 12, 9, 4, 2]
+sequences = (note7, seq)
+cf_fail_examples.append(sequences)
+note7, seq = False, [2, 9, 11, 2, 4, 2]
+sixthM = (note7, seq)
+cf_fail_examples.append(sixthM)
+badJump = (False, [2, 4, 5, 4])
+cf_fail_examples.append(badJump)
+
+
+''' example = D0, F0, E0, D0, G0, F0, A0, G0, F0, E0, RE'''
+s = random.choice(cf_examples)[1].copy()
+''' s[0] = D0# = s[0] + 1'''
+s[0] = s[0] + 1
+counterBadStart = NodeFromSequence(s, octaveShift=0, isCantus=False)
+''' exampleCp = A0 , A0, G0, A0, B0, C1, C1, B0, D1, C1#, D1'''
+
+''' quintas paralelas con la referencia '''
+parallelFifth = []
+parallelFifth.append(example[0] + 7)
+parallelFifth.append(example[1] + 7)
+parallel_5 = NodeFromSequence(parallelFifth, 0)
 
 
 
 
 
-example = mixo
-failExample = sixthM
 
 
-exampleCounter = [9, 9, ]
+
+def ToNote12(examples):
+    for e in examples:
+        assert(e[1] is not None)
+        '''check if cf is note7'''
+        if e[0]:
+            length = len(e[1])
+            s = e[1]
+            for i in range(0, length):
+                s[i] = Note.diatonicScale(0, s[i])
+        e.reverse()
+
+
+ToNote12(cf_examples)
+ToNote12(cf_fail_examples)
+ToNote12(cp_examples)
+ToNote12(cp_fail_examples)
+
+
+
+
+if cf_reference[1] == 7:
+    '''convertimos de note7 a note12'''
+    cf = cf_reference[0]
+    for i in range(0, len(example)):
+        value = example[i]
+        example[i] = Note.diatonicScale(0, value)
+
+
+
 
 
 def NodeFromSequence(sequence, octaveShift, reverse=True, isCantus=False):
@@ -57,24 +133,10 @@ def NodeFromSequence(sequence, octaveShift, reverse=True, isCantus=False):
     return node
 
 #
-# ''' example = D0, F0, E0, D0, G0, F0, A0, G0, F0, E0, RE'''
-# s = example.copy()
-# ''' s[0] = D0# = s[0] + 1'''
-# s[0] = s[0] + 1
-# counterBadStart = NodeFromSequence(s, octaveShift=0, isCantus=False)
-# ''' exampleCp = A0 , A0, G0, A0, B0, C1, C1, B0, D1, C1#, D1'''
-#
-# ''' quintas paralelas con la referencia '''
-# parallelFifth = []
-# parallelFifth.append(example[0] + 7)
-# parallelFifth.append(example[1] + 7)
-# parallel_5 = NodeFromSequence(parallelFifth, 0)
+
 #
 
-'''convertimos de note12 a note7'''
-for i in range(0, len(example)):
-    value = example[i]
-    example[i] = Note.diatonicScale(0, value)
+
 #
 # for i in range(0, len(failExample)):
 #     value = failExample[i]
@@ -124,21 +186,20 @@ class TestCases(unittest.TestCase):
                 print(Note((-i) % 12).name + str(-i//12))
                 print(Diatonic.interval(0, -i))
 
-    def testExample(self):
-        if testExample:
-            print('testing cf')
-            s = example
-            s.reverse()
-            for i in range(0, len(s)):
-                if i == 0:
-                    node = Node(s[0])
-                else:
-                    node = Node(s[i], node)
-                valid = node.validMelody(len(s))
-                if not valid:
-                    print('invalid ' + str(node.sequence))
-                assert(valid)
-                print('sequence passed')
+    def test_example(self):
+        print('testing cf')
+        s = example
+        s.reverse()
+        for i in range(0, len(s)):
+            if i == 0:
+                node = Node(s[0])
+            else:
+                node = Node(s[i], node)
+            valid = node.validMelody(len(s))
+            if not valid:
+                print('invalid ' + str(node.sequence))
+            assert(valid)
+            print('sequence passed')
 
     def testFail(self):
         if testFailExample:
@@ -181,20 +242,4 @@ class TestCases(unittest.TestCase):
 print('enter test module')
 print(sys.argv)
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        arg1 = sys.argv.pop()
-        arg2 = sys.argv.pop()
-        print(arg1)
-        print(arg2)
-        if arg1 == 'n':
-            testNotes = True
-        elif arg1 == 'e':
-            testExample = True
-        elif arg1 == 'f':
-            testFailExample = True
-        elif arg1 == 'i':
-            testIntervals = True
-    else:
-        testNotes = testExample = testFail = True
-    print('hereS')
     unittest.main()

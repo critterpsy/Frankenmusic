@@ -21,6 +21,7 @@ class Note(Enum):
 
     @staticmethod
     def isWhite(note):
+        note = note % 12
         if note <= 4:
             if note % 2 == 0:
                 return True
@@ -42,13 +43,11 @@ class Note(Enum):
         for i in range(1, (-step) + 1):
             succ = -2 if (root % 12 != 0 and root % 12 != 5) else -1
             root = root + succ
-            return root
+        return root
 
     @staticmethod
     def interval(fr, to):
         s = str(abs(to - fr)+1)
-        fr = Note.diatonic(fr)
-        to = Note.diatonic(to)
         s_ = (to - fr) % 12
         if abs(to - fr)+1 < 10:
             s = ' ' + s
@@ -73,8 +72,6 @@ class Note(Enum):
 
     @staticmethod
     def nInterval(note1, note2):
-        note1 = Note.diatonic(note1)
-        note2 = Note.diatonic(note2)
         return abs(note2 - note1) % 12
 
     @staticmethod
@@ -161,7 +158,12 @@ class Diatonic(Enum):
 
     @staticmethod
     def index(note12):
-        return int((note12 + int(note12/5))/2)
+        # if note < 0:
+        #     note = note % 12
+        #     return int((note12 + int(note12/5))/2)
+        oct = note12//12
+        note12 = note12 % 12
+        return (note12 + note12//5) // 2 + 7*oct
 
     @staticmethod
     def interval(note1, note2):

@@ -1,81 +1,85 @@
 from node import Node
 from collections import Counter
 from Note import Note
+import sys
 
 container = []
 maxDepth = 11
 counterP = []
-cantus = [1, 3, 2, 1, 4, 3, 5, 4, 3, 2, 1]
-testCounter = [5, 5, 4, 5, 6, 7, 7, 6, 8, 7, 8]
 
 
 def Search(note, depth, maxDepth, plagal, lastNode=None):
-
+    print('depth' + str(depth))
+    seq = str(lastNode.sequence) if lastNode else ''
+    print('initialize node at :'+str(note)+' preSequence : '+seq+' depth : '+str(depth))
     if depth == 0:
         # print('starting from: '+str(note))
         new_node = Node(note)
     else:
         new_node = Node(note, lastNode)
-    if not new_node.isValid():
+    if not new_node.validMelody(size=11, counterMode=False, mode=new_node.root):
+        print('invalid '+str(new_node.sequence))
         return
     else:
-        pass
+        print('valid '+str(new_node.sequence))
     if depth + 1 == maxDepth:
+        print('depth exceeeeeede!!!!!!!!!!!!!!!'+str(new_node.sequence))
         container.append(new_node)
         return
     shift = 5 if plagal else 0
     root = new_node.root
-    for i in range(root - shift, root + 12 - shift):
+    if depth + 2 == maxDepth:
+        Search(new_node.root, depth + 1, maxDepth, plagal, new_node)
+        return
+    for i in range(0, 7):
         newNote = Note.diatonicScale(root - shift, i)
+        print('searching '+str(new_node.sequence)+str(newNote))
+        print('note to search is: ' + str(i))
         Search(newNote, depth + 1, maxDepth, plagal, new_node)
 
 
 def SearchCantus(initial, length, plagal):
     step = 0
+    print('search called')
     Search(initial, step, length, plagal, lastNode=None)
 
 
-def pruneCantus(cArray, hiIndex, discontinuities, variety, modeRepetitions):
-    length = len(cArray)
-    hiIndex = 11 - hiIndex
+def pruneCantus(arr, hi, disc, variety, modeRep, cTest=None):
+    length = len(arr)
+    size = 0
     for i in range(0, length):
         if i > length - 1:
             break
-        s = container[i].sequence
-        # setBreak = False
-        # for k in range(0,11):
-        #     if TerminalNode[i].sequence[k] != cTest[k]:
-        #         setBreak = True
-        #         break
-        # if setBreak:print('abc , a+x b+x c+x')
-        #     continue
-        # else:
-        #     print('found')
-        if cArray[i].disc > discontinuities:
-            # print(1)
-            # break
+        s = arr[i].sequence
+        if arr[i].disc > disc:
             continue
-        if cArray[i].hiIndex > hiIndex:
-            # print(2)
-            # break
+        if arr[i].hiIndex > 11 - hi:
             continue
-        if len(Counter(cArray[i].sequence).keys()) < 5:
-            # print(3)
-            # break
+        if len(Counter(arr[i].sequence).keys()) < variety:
             continue
-        if cArray[i].modeRep < 1:
-            # print(4)
-            # break
+        if arr[i].modeRep < modeRep:
             continue
-
+        if cTest:
+            setBreak = False
+            for k in range(0, 11):
+                if s[k] != cTest[k]:
+                    setBreak = True
+                    break
+            if setBreak:
+                continue
+            print('found')
+            print('cf found :'+str(size))
+            arr[i].printNotes()
+            # return
         interval = []
-        TerminalNode[i].printNotes()
-        # for j in range(0,11):
-        #     if j == 0:
-        #         continue
-        #     interval.append(Note.interval(s[j-1], s[j]))
+        size = size + 1
+        arr[i].printNotes()
         print(s)
         print(str(interval) + '\n')
+        print(i)
+    print(size)
+    if cTest:
+        print('notFound')
 
 
 def searchCounter(mode, note, cantus, depth, plagal, lastNode=None):
@@ -89,7 +93,7 @@ def searchCounter(mode, note, cantus, depth, plagal, lastNode=None):
     else:
         # print('constructing child '+str(note) + ' from :'+str(lastNode.note))
         newNode = Node(note, lastNode)
-    if not newNode.isValid(True, mode):
+    if not newNode.validMelody(11, True, mode):
         print('---invalid melody '+str(newNode.sequence))
         # print(str(note)+' invalid melody')
         return
@@ -116,13 +120,14 @@ def searchCounter(mode, note, cantus, depth, plagal, lastNode=None):
         searchCounter(mode, mode, cantus, depth + 1, plagal, newNode)
         searchCounter(mode, mode + 4, cantus, depth + 1, plagal, newNode)
         return
-    for i in range(mode - shift, mode + 7 - shift):
-        interval = i - cantus[depth + 1]
+    for i in range(0, 7):
+        interval = (mode - shift + i) - cantus[depth + 1]
+        interval = abs(interval)
         print('index'+str(i))
         print('step '+str(depth))
         print('cantus '+str(cantus[depth]))
-        print('diatonic interval' + str(Note.diatonic(interval)))
-        interval = Note.diatonic(interval) % 12
+        print('interval' + str(interval))
+
         if interval == 1:
             continue
         if interval == 2:
@@ -135,7 +140,7 @@ def searchCounter(mode, note, cantus, depth, plagal, lastNode=None):
             continue
         if interval == 11:
             continue
-        searchCounter(mode, i, cantus, depth + 1, plagal, newNode)
+        searchCounter(mode, mode - shift + i, cantus, depth + 1, plagal, newNode)
 
 
 def GenerateCounter(cantus):
@@ -166,19 +171,20 @@ def GenerateCounter(cantus):
         print(intervals)
 
 
-def testCounter(seq, cantus):
+def testCounter(seq, cantus, octave=0):
     for m in range(0, 11):
         if m == 0:
-            cp = Node(seq[0])
+            cp = Node(seq[0] + 12*octave)
             previous = cp
         else:
-            cp = Node(seq[m], previous)
-            if not cp.isValid(True, cantus[0]+7):
+            cp = Node(seq[m]+12*octave, previous)
+            if not cp.validMelody(11, True, cantus[0]+12*1):
                 print('invalid movement from counterpoint '+str(cp.index))
                 break
             previous = cp
         if not cp.validateVoice1(cantus):
             print('invalid counter point '+str(cp.index))
+            print('note : '+str(cp.note))
             Note.printSequence(cp.sequence, True)
             Note.printSequence(cantus[0:len(cp.sequence)], True)
             Note.printIntervales(cantus[0:len(cp.sequence)], cp.sequence, True)
@@ -188,3 +194,44 @@ def testCounter(seq, cantus):
         print('valid counter point')
 
     return cp
+
+
+s = [2, 5, 4, 2, 7, 5, 9, 7, 5, 4, 2]
+cantus = [1, 3, 2, 1, 4, 3, 5, 4, 3, 2, 1]
+counterDiat = [5, 5, 4, 5, 6, 7, 7, 6, 8, 7, 8]
+counter = [9, 9, 7, 9, 11, 12, 12, 11, 14, 13, 14]
+
+if sys.argv[1] == 'scf':
+    SearchCantus(2, 11, False)
+    s.reverse()
+    pruneCantus(container, hi=6, disc=3, variety=5, modeRep=3, cTest=s)
+    print(len(container))
+if sys.argv[1] == 'scp':
+    s.reverse()
+    GenerateCounter(s)
+if sys.argv[1] == 'tcp':
+    s.reverse()
+    counter.reverse()
+    testCounter(counter, s, octave=1)
+    print('testCounter')
+if sys.argv[1] == 'tcf':
+    print('testing cf')
+    s.reverse()
+    for i in range(0, len(s)):
+        if i == 0:
+            node = Node(s[0])
+        else:
+            node = Node(s[i], node)
+        valid = node.validMelody(len(s))
+    if not valid:
+        print('invalid ' + str(node.sequence))
+    if node.disc > 3:
+        print('disc :' + str(node.disc))
+    if node.hiIndex > 11 - 6:
+        print('invalid hiIndex ' + str(node.hiIndex))
+    if len(Counter(node.sequence).keys()) < 5:
+        print('variety ' + str(len(Counter(node.sequence).keys())))
+    if node.modeRep < 3:
+        print('modeRep :' + str(node.modeRep))
+# for c in container:
+    #     print(c.printNotes())
