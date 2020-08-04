@@ -115,22 +115,7 @@ if cf_reference[1] == 7:
 
 
 
-def NodeFromSequence(sequence, octaveShift, reverse=True, isCantus=False):
-    failures = ''
-    if reverse:
-        sequence.reverse()
-    for i in range(0, len(sequence)):
-        valid = True
-        if i == 0:
-            node = Node(sequence[0] + 12*octaveShift)
-        else:
-            print(node)
-            node = Node(sequence[i], node)
-            valid = node.validMelody(size=len(sequence), counter=not isCantus, mode=node.root)
-        if not valid:
-            failures = failures + node.failures[i]
-    print(failures)
-    return node
+
 
 #
 
