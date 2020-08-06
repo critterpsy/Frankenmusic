@@ -9,21 +9,14 @@ counterP = []
 
 
 def Search(note, depth, maxDepth, plagal, lastNode=None):
-    print('depth' + str(depth))
-    seq = str(lastNode.sequence) if lastNode else ''
-    print('initialize node at :'+str(note)+' preSequence : '+seq+' depth : '+str(depth))
     if depth == 0:
-        # print('starting from: '+str(note))
         new_node = Node(note)
     else:
         new_node = Node(note, lastNode)
-    if not new_node.validMelody(size=11, counterMode=False, mode=new_node.root):
-        print('invalid '+str(new_node.sequence))
+    if not new_node.validMelody(size=11, counter=False, mode=new_node.root):
+        
         return
-    else:
-        print('valid '+str(new_node.sequence))
     if depth + 1 == maxDepth:
-        print('depth exceeeeeede!!!!!!!!!!!!!!!'+str(new_node.sequence))
         container.append(new_node)
         return
     shift = 5 if plagal else 0
@@ -33,8 +26,6 @@ def Search(note, depth, maxDepth, plagal, lastNode=None):
         return
     for i in range(0, 7):
         newNote = Note.diatonicScale(root - shift, i)
-        print('searching '+str(new_node.sequence)+str(newNote))
-        print('note to search is: ' + str(i))
         Search(newNote, depth + 1, maxDepth, plagal, new_node)
 
 

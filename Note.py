@@ -32,6 +32,10 @@ class Note(Enum):
             return True
 
     @staticmethod
+    def absoluteInterval(note1, note2):
+        return abs(note1 - note2) % 12
+
+    @staticmethod
     def diatonicScale(root, step):
         if step == 0:
             return root
