@@ -22,9 +22,8 @@ class TreeEncoder(JSONEncoder):
         return attrs
 
 
-a = TreeNode()
-
-b = TreeNode(parent=a)
-
-a_json = json.dumps(a, indent=4, cls=TreeEncoder)
-a_json
+if __name__ == '__main__':
+    a = TreeNode()
+    b = TreeNode(parent=a)
+    a_json = json.dumps(a, indent=4, cls=TreeEncoder)
+    a_json

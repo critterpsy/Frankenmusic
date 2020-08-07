@@ -85,23 +85,23 @@ mTritone2 = Example(sequence=seq, note7=True, failures=failures)
 cf_fail_examples.append(mTritone2)
 
 note7, seq = True, [0, 2, 1, 0, 3, 2, 4, 3, 2, -1, 0]
-failures = [(f_.bad_ending, len(seq) - 2)]
+failures = [(f_.bad_ending, 1)]
 badEnding = Example(sequence=seq, note7=True, failures=failures)
 cf_fail_examples.append(badEnding)
 
-note7, seq = False, [2, 7, 5, 9, 11, 12, 11, 12, 9, 4, 2]
-failures = [(f_.seq, 3), (f_.seq)]
-sequences = Example(sequence=seq, note7=True, failures=failures)
+note7, seq = False, [2, 7, 4, 9, 11, 12, 11, 12, 9, 4, 2]
+failures = [(f_.seq, 10), (f_.seq, 6)]
+sequences = Example(sequence=seq, note7=False, failures=failures)
 cf_fail_examples.append(sequences)
 
 note7, seq = False, [2, 9, 11, 2, 4, 2]
-failures = [(f_.sixthM, 3)]
+failures = [(f_.badJump, 3)]
 sixthM = Example(sequence=seq, note7=False, failures=failures)
 cf_fail_examples.append(sixthM)
 
-note7, seq = False, [2, 4, 7, 4]
-failures = [(f_.badJump, 2)]
-badJump = Example(sequence=seq, note7=True, failures=failures)
+note7, seq = False, [2, 4, 11, 2]
+failures = [(f_.badJump, 1)]
+badJump = Example(sequence=seq, note7=False, failures=failures)
 cf_fail_examples.append(badJump)
 
 

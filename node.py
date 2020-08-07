@@ -11,6 +11,9 @@ f_ = failureCases
 
 class Node:
     def __init__(self, note, lastNode=None, debug=False):
+        if debug:
+            print('construct node, debugMode :'+str(debug))
+            self.fail = False
         self.note = note
         if lastNode is None:
             self.sequence = [note]
@@ -53,19 +56,22 @@ class Node:
         subSequence = self.sequence[0:n]
         return Node.FromSequence(subSequence)
 
-    def debugLog(self, message):
-        print('logging {}'.format(message))
+    def debugLog(self, message, details=None):
+        # print('logging {}'.format(message))
+        self.fail = True
         index = self.index
         failures = self.failures
-        message = message + ' '
+        message = message + '[{}]'.format(self.index)
+        if details:
+            message = message + ' function :{} '.format(details)
         try:
             log = failures[index]
             failures[index] = log + message
-            print('failures here : {}'.format(message))
         except Exception:
             failures.append(message)
-            print('initalizing failures array')
-        print(self.failures)
+        if self.debug:
+            print(self.failures)
+        # print(self.failures)
 
     def jump(self):
         if self.index == 0:
@@ -127,8 +133,9 @@ class Node:
 
     def checkJumpEnd(self):
         if self.index == 2 and self.jump() >= 7:
-            # print('.jump down before end')
+            print('.jump down before end')
             return False
+        return True
 
     def checkLegalJump(self, j):
         if j > 1:
@@ -157,6 +164,7 @@ class Node:
                 if j_chrome == -9:
                     # print('note , note + 6M')
                     return False
+        return True
 
     def checkTritoneIsolated(self, lastJump):
         if self.jump() / lastJump < 0:
@@ -176,6 +184,7 @@ class Node:
                 return False
             elif self.index >= 2 and self.sequence[self.index - 2] == note:
                 return False
+        return True
 
     def validMelody(self, size=11, counter=False, mode=None):
         index = self.index
@@ -184,50 +193,50 @@ class Node:
             '''si nota es parent, rompe regla de nota repetida'''
             '''contrapunto tiene permitido repetir a los mas dos'''
             if not self.checkRepetition(counter):
-                print('checking!!!!!!!!!!!!1')
-                print('debug mode in validMelody ' + str(self.debug))
+                print('repeated note')
                 if self.debug:
                     print('entro en: '+str(self.note))
-                    self.debugLog(f_.repeated_note)
+                    self.debugLog(f_.repeated_note, 'checkRepeteadNote')
                 else:
                     return False
             if index == 1 and not self.checkEnd(index, note, counter, mode):
                 # print('invalid ending '+str(self.sequence))
                 if self.debug:
-                    self.debugLog(f_.bad_ending)
+                    self.debugLog(f_.bad_ending, 'checkEnd')
                 else:
                     return False
             if not self.checkTritone(note):
                 if self.debug:
-                    self.debugLog(f_.tritone)
+                    self.debugLog(f_.tritone, 'triton check')
                 else:
                     return False
-            if index < 2:
+            if index < 2 and not self.debug:
                 return True
             if not self.checkJumpEnd():
                 if self.debug:
-                    self.debugLog(f_.bad_movement)
+                    print('here!!!!')
+                    self.debugLog(f_.bad_movement, 'checkJumpEnd {}'.format(index))
                 else:
                     return False
             lastJump = self.sequence[index - 1] - self.sequence[index - 2]
             if lastJump != 0 and not self.checkTritoneIsolated(lastJump):
                 if self.debug:
-                    self.debugLog(f_.isolated_tritone)
+                    self.debugLog(f_.isolated_tritone, 'checkITritone')
                 else:
                     return False
             j = Diatonic.index(note) - Diatonic.index(self.parent)
             if j != 0 and not self.checkLegalJump(j):
                 if self.debug:
-                    self.debugLog(f_.badJump)
+                    self.debugLog(f_.badJump, 'checkBadJump')
                 else:
                     return False
-            if index < 3:
+            if index < 3 and not self.debug:
                 return True
             jump = Diatonic.interval(self.parent, self.note)
             seq = self.sequence
             if not self.checkMovement(jump, seq, index):
                 if self.debug:
-                    self.debugLog(f_.bad_movement)
+                    self.debugLog(f_.bad_movement, str(self.index))
                 else:
                     return False
             if not self.checkSequences(seq, index):
@@ -241,27 +250,17 @@ class Node:
                     self.debugLog(f_.bad_start)
                 else:
                     return False
-            if self.debug:
-                try:
-                    if self.failures[index] != '':
-                        return False
-                except Exception:
-                    return True
+            if self.debug and self.fail:
+                return False
         return True
 
     def checkMovement(self, jump, seq, index):
         j = Diatonic.interval(seq[index - 2], seq[index - 1])
         # print('check movement {}'.format(self.note))
         if j == 1 and jump > 1:
-            parent = self.parent
-            note = self.note
-            p = seq[index - 2]
             # print('{} {} {}: jump down + continuos '.format(note, parent, p))
             return False
         elif jump == -1 and j < -1:
-            parent = self.parent
-            note = self.note
-            p = seq[index - 2]
             # print('{} {} {}: continous + jumpUp'.format(note, parent, p))
             return False
         return True

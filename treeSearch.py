@@ -3,21 +3,25 @@ from collections import Counter
 from Note import Note
 import sys
 
-container = []
+print('shit')
+
+searched_cf = []
+pruned_cf = []
 maxDepth = 11
 counterP = []
+debugMode = False
 
 
 def Search(note, depth, maxDepth, plagal, lastNode=None):
+    debug = debugMode
     if depth == 0:
-        new_node = Node(note)
+        new_node = Node(note, lastNode=lastNode, debug=debug)
     else:
-        new_node = Node(note, lastNode)
-    if not new_node.validMelody(size=11, counter=False, mode=new_node.root):
-        
+        new_node = Node(note, lastNode=lastNode, debug=debug)
+    if not new_node.validMelody(size=11, counter=False, mode=new_node.root, ):
         return
     if depth + 1 == maxDepth:
-        container.append(new_node)
+        searched_cf.append(new_node)
         return
     shift = 5 if plagal else 0
     root = new_node.root
@@ -39,17 +43,17 @@ def pruneCantus(arr, hi, disc, variety, modeRep, cTest=None):
     length = len(arr)
     size = 0
     for i in range(0, length):
-        if i > length - 1:
-            break
         s = arr[i].sequence
-        if arr[i].disc > disc:
-            continue
-        if arr[i].hiIndex > 11 - hi:
-            continue
-        if len(Counter(arr[i].sequence).keys()) < variety:
-            continue
-        if arr[i].modeRep < modeRep:
-            continue
+        node = arr[i]
+        # if node.disc > disc:
+        #     continue
+        # if node.hiIndex > len(searched_cf) - hi:
+        #     continue
+        # if len(Counter(s).keys()) < variety:
+        #     continue
+        # if node.modeRep < modeRep:
+        #     continue
+        size = size + 1
         if cTest:
             setBreak = False
             for k in range(0, 11):
@@ -60,16 +64,16 @@ def pruneCantus(arr, hi, disc, variety, modeRep, cTest=None):
                 continue
             print('found')
             print('cf found :'+str(size))
-            arr[i].printNotes()
+            node.printNotes()
             # return
+        pruned_cf.append(node)
         interval = []
-        size = size + 1
-        arr[i].printNotes()
+        node.printNotes()
         print(s)
         print(str(interval) + '\n')
         print(i)
     print(size)
-    if cTest:
+    if cTest and not setBreak:
         print('notFound')
 
 
@@ -192,37 +196,58 @@ cantus = [1, 3, 2, 1, 4, 3, 5, 4, 3, 2, 1]
 counterDiat = [5, 5, 4, 5, 6, 7, 7, 6, 8, 7, 8]
 counter = [9, 9, 7, 9, 11, 12, 12, 11, 14, 13, 14]
 
-if sys.argv[1] == 'scf':
-    SearchCantus(2, 11, False)
-    s.reverse()
-    pruneCantus(container, hi=6, disc=3, variety=5, modeRep=3, cTest=s)
-    print(len(container))
-if sys.argv[1] == 'scp':
-    s.reverse()
-    GenerateCounter(s)
-if sys.argv[1] == 'tcp':
-    s.reverse()
-    counter.reverse()
-    testCounter(counter, s, octave=1)
-    print('testCounter')
-if sys.argv[1] == 'tcf':
-    print('testing cf')
-    s.reverse()
-    for i in range(0, len(s)):
-        if i == 0:
-            node = Node(s[0])
-        else:
-            node = Node(s[i], node)
-        valid = node.validMelody(len(s))
-    if not valid:
-        print('invalid ' + str(node.sequence))
-    if node.disc > 3:
-        print('disc :' + str(node.disc))
-    if node.hiIndex > 11 - 6:
-        print('invalid hiIndex ' + str(node.hiIndex))
-    if len(Counter(node.sequence).keys()) < 5:
-        print('variety ' + str(len(Counter(node.sequence).keys())))
-    if node.modeRep < 3:
-        print('modeRep :' + str(node.modeRep))
-# for c in container:
-    #     print(c.printNotes())
+
+def main():
+
+    if sys.argv[1] == 'scf':
+        try:
+            if sys.argv[2] == 'prune':
+                prune = True
+        except Exception:
+            prune = False
+        print(sys.argv[2])
+        SearchCantus(2, 11, False)
+        s.reverse()
+        if prune:
+            pruneCantus(searched_cf, hi=6, disc=3, variety=5, modeRep=3, cTest=s)
+        print('examples found ' + str(len(searched_cf)))
+        print('after prune :' + str(len(pruned_cf)))
+        print('pruneParam {}'.format(prune))
+    if sys.argv[1] == 'scp':
+        s.reverse()
+        GenerateCounter(s)
+    if sys.argv[1] == 'tcp':
+        s.reverse()
+        counter.reverse()
+        testCounter(counter, s, octave=1)
+        print('testCounter')
+    if sys.argv[1] == 'tcf':
+        print('testing cf')
+        s.reverse()
+        debug = debugMode
+        for i in range(0, len(s)):
+            if i == 0:
+                print('start node')
+                node = Node(s[0], debug=debug)
+            else:
+                print('node from parent')
+                node = Node(s[i], lastNode=node, debug=debug)
+            valid = node.validMelody(len(s))
+            print('{} is valid {}'.format(node.sequence, valid))
+            if not valid:
+                print(node.failures)
+                break
+        if not valid:
+            print('invalid ' + str(node.sequence))
+        if node.disc > 3:
+            print('disc :' + str(node.disc))
+        if node.hiIndex > 11 - 6:
+            print('invalid hiIndex ' + str(node.hiIndex))
+        if len(Counter(node.sequence).keys()) < 5:
+            print('variety ' + str(len(Counter(node.sequence).keys())))
+        if node.modeRep < 3:
+            print('modeRep :' + str(node.modeRep))
+
+
+if __name__ == '__main__':
+    main()
