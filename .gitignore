@@ -1,7 +1,147 @@
-# Default ignored files
-/shelf/
-/workspace.xml
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.dylib
 
-/.vscode/*
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
 
-__pycache__
+# Precompiled Headers
+*.gch
+*.pch
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Debug files
+*.dSYM/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+*.so.*
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+
+# Visual Studio Code files
+.vscode/
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*,cover
+.hypothesis/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+cactus/static/
+# migrations/
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# Doxygen documentation
+html/
+
+# PyBuilder
+target/
+
+# IPython Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# dotenv
+.env
+
+# Spyder project settings
+.spyderproject
+
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# celery beat schedule file
+celerybeat-schedule
+
+# virtualenv
+venv/
+ENV/
+
+# Rope project settings
+.ropeproject
+
+# travis-solo
+.travis-solo/*
+
+# project-specific
+*.sqlite3*
+
+# VisualStudio compiler
+obj/
+*.suo
+
+# Project specifics
+*/public/*
+
+*.csv
+
+# Kubernetes secrets
+*/kube_secrets/*
+.venv
