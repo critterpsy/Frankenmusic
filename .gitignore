@@ -39,8 +39,7 @@ __pycache__/
 *.lo
 
 # Visual Studio Code files
-.vscode/*
-*/.vscode
+.vscode/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -146,4 +145,3 @@ obj/
 # Kubernetes secrets
 */kube_secrets/*
 .venv
-cactus_code_workspace.code-workspace
