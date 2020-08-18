@@ -132,8 +132,7 @@ class Note(Enum):
             print(str(interval)+' st consonance '+str(note1)+','+str(note2))
             return True
 
-        print(
-             str(interval)+' st disonance ' +
+        print(str(interval)+' st disonance ' +
               Note(note1).name+','+Note(note2).name)
         print(str(note1)+' '+str(note2))
         return False
