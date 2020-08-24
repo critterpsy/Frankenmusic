@@ -107,39 +107,48 @@ class Note(Enum):
         print(s)
 
     @staticmethod
-    def Consonant(note1, note2):
+    def Consonant(note1, note2, debug=False):
         interval = Note.nInterval(note1, note2)
         if interval != 12:
             interval = interval % 12
         if interval == 12:
-            print('8va consonance')
+            if debug:
+                print('8va consonance')
             return True
         if interval == 0:
-            print(' '+str(note1)+','+str(note2))
+            if debug:
+                print(' '+str(note1)+','+str(note2))
             return True
         if interval == 7:
-            print(str(interval)+' st consonance '+str(note1)+','+str(note2))
+            if debug:
+                print(str(interval)+' st consonance '+str(note1)+','+str(note2))
             return True
         if interval == 12:
-            print(str(interval)+' st consonance '+str(note1)+','+str(note2))
+            if debug:
+                print(str(interval)+' st consonance '+str(note1)+','+str(note2))
             return True
         if interval == 3:
-            print(str(interval)+' st consonance '+str(note1)+','+str(note2))
+            if debug:
+                print(str(interval)+' st consonance '+str(note1)+','+str(note2))
             return True
         if interval == 4:
-            print(str(interval)+' st consonance '+str(note1)+','+str(note2))
+            if debug:
+                print(str(interval)+' st consonance '+str(note1)+','+str(note2))
             return True
         if interval == 8:
-            print(str(interval)+' st consonance '+str(note1)+','+str(note2))
+            if debug:
+                print(str(interval)+' st consonance '+str(note1)+','+str(note2))
             return True
         if interval == 9:
-            print(str(interval)+' st consonance '+str(note1)+','+str(note2))
+            if debug:
+                print(str(interval)+' st consonance '+str(note1)+','+str(note2))
             return True
-
-        print(
-             str(interval)+' st disonance ' +
-              Note(note1).name+','+Note(note2).name)
-        print(str(note1)+' '+str(note2))
+        if debug:
+            print(
+                 str(interval)+' st disonance ' +
+                 Note(note1 % 12).name + ',' + Note(note2 % 12).name)
+        if debug:
+            print(str(note1)+' '+str(note2))
         return False
 
     @staticmethod

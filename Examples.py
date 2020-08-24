@@ -16,8 +16,14 @@ b = 6
 
 
 class Example:
-    def __init__(self, sequence, note7=True, failures=None, reference=None, straight=True):
+    def __init__(self,
+                 sequence,
+                 note7=True,
+                 failures=None,
+                 reference=None,
+                 name=None):
         assert(seq is not None)
+        self.name = name
         if note7:
             self.sequence = []
             length = len(seq)
@@ -26,7 +32,12 @@ class Example:
         else:
             self.sequence = sequence
         self.failures = failures
+        self.reference = reference
 
+    def __str__(self):
+        reference = self.reference if self.reference else ''
+        return 'Example name :{}'.format(self.name) + '\n' + \
+            str(self.sequence) + '\n reference :\n {}'.format(reference)
 
 
 cf_examples = []
@@ -35,7 +46,7 @@ cf_fail_examples = []
 cp_examples = []
 cp_fail_examples = []
 
-note7, seq = True, [0, 2, 1, 0, 3, 2, 4, 3, 2, 1, 0]
+note7, seq = True, [1, 3, 2, 1, 4, 3, 5, 4, 3, 2, 1]
 standard = Example(sequence=seq, note7=True, failures=None)
 cf_examples.append(standard)
 
@@ -106,16 +117,47 @@ cf_fail_examples.append(badJump)
 
 
 ''' example = D0, F0, E0, D0, G0, F0, A0, G0, F0, E0, RE'''
-reference_cf = random.choice(cf_examples).sequence
+# reference_cf = random.choice(cf_examples).sequence
+reference_cf = cf_examples[0].sequence
 sequence_cp = reference_cf.copy()
 sequence_cp[0] = sequence_cp[0] + 1
 counterBadStart = Example(sequence=sequence_cp,
                           note7=False,
-                          failures=[(f_.dissonance)],
-                          reference=(reference_cf)
+                          failures=[(f_.dissonance, 10), (f_.bad_start, 10)],
+                          reference=(reference_cf),
+                          name='bad start!'
                           )
 cp_fail_examples.append(counterBadStart)
-''' s[0] = D0# = s[0] + 1'''
+
+
+parallel_5 = []
+failures = []
+for i in range(0, len(reference_cf)):
+    parallel_5.append(reference_cf[i] + 7)
+    if i == 10:
+        continue
+    fail_index = len(reference_cf) - 1 - i
+    failures.append((f_.parallel5, fail_index))
+example = Example(sequence=parallel_5,
+                  note7=(False),
+                  failures=failures,
+                  name='P5_FAIL_EXAMPLE')
+
+
+cp_fail_examples.append(example)
+
+dorian_cp = [9, 9, 7, 9, 11, 12, 12, 11, 14, 13, 14]
+dorian_example = Example(sequence=dorian_cp,
+                         note7=False,
+                         name='dorian counter example 0',
+                         reference=(reference_cf)
+                         )
+cp_examples.append(dorian_example)
+
+seq = [9, 8, 13, 11, 11, 13, 12, 4, 5, 1, 14]
+
+example = Example(seq, note7=(False), reference=(reference_cf))
+cp_examples.append(example)
 # counterBadStart = Node.FromSequence(cf, octaveShift=0, isCantus=False)
 # ''' exampleCp = A0 , A0, G0, A0, B0, C1, C1, B0, D1, C1#, D1'''
 #

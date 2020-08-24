@@ -2,23 +2,31 @@ from node import Node
 from collections import Counter
 from Note import Note
 import sys
+from tree import SNode
+from Examples import cf_examples
 
-print('shit')
+
 
 searched_cf = []
+serialized_cf = []
+js = []
 pruned_cf = []
 maxDepth = 11
 counterP = []
-debugMode = False
+debug_mode = True
+debug_break_search = True
 
 
-def Search(note, depth, maxDepth, plagal, lastNode=None):
+def search(note, depth, maxDepth, plagal, lastNode=None, serializable=None):
     debug = debugMode
     if depth == 0:
-        new_node = Node(note, lastNode=lastNode, debug=debug)
+        new_node = Node(note, debug=debug)
+        # nodeS = SNode(value=Note, parent=None)
+        # js.append(nodeS)
     else:
         new_node = Node(note, lastNode=lastNode, debug=debug)
-    if not new_node.validMelody(size=11, counter=False, mode=new_node.root, ):
+        # nodeS = SNode(value=note, parent=serializable)
+    if not new_node.validMelody(size=11, counter=False, mode=new_node.root):
         return
     if depth + 1 == maxDepth:
         searched_cf.append(new_node)
@@ -26,28 +34,101 @@ def Search(note, depth, maxDepth, plagal, lastNode=None):
     shift = 5 if plagal else 0
     root = new_node.root
     if depth + 2 == maxDepth:
-        Search(new_node.root, depth + 1, maxDepth, plagal, new_node)
+        search(
+               note=new_node.root,
+               depth=depth + 1,
+               maxDepth=maxDepth,
+               plagal=plagal,
+               lastNode=new_node,
+               serializable=None)
         return
+
     for i in range(0, 7):
         newNote = Note.diatonicScale(root - shift, i)
-        Search(newNote, depth + 1, maxDepth, plagal, new_node)
+        search(
+                note=newNote,
+                depth=depth + 1,
+                maxDepth=maxDepth,
+                plagal=plagal,
+                lastNode=new_node,
+                serializable=None)
 
 
-def SearchCantus(initial, length, plagal):
+def search_cantus(initial, length, plagal):
     step = 0
     print('search called')
-    Search(initial, step, length, plagal, lastNode=None)
+    search(initial, step, length, plagal, lastNode=None, serializable=None)
+    print('search halt')
 
 
-def pruneCantus(arr, hi, disc, variety, modeRep, cTest=None):
+def searchCounter(mode, note, cantus, depth, plagal, lastNode=None, filter=None):
+    if debug_break_search:
+        input("Press enter to continue :\n")
+    print('new note {}'.format(note) + ' thread :{}'.format(lastNode.sequence if lastNode else ''))
+    if filter:
+        print('step {}'.format(depth))
+        print('filter {}'.format(filter))
+    if depth == 0:
+        newNode = Node(note, debug=debug_mode)
+    else:
+        newNode = Node(note, lastNode,  debug=debug_mode)
+    if not newNode.validMelody(11, True, mode):
+        # print('---invalid melody '+str(newNode.sequence))
+        return
+    if not newNode.valid_cp(cantus):
+        # print('---invalid counter')
+        return
+    else:
+        print('valid {}'.format(note))
+    if depth + 1 == maxDepth:
+        counterP.append(newNode)
+        return
+    shift = 4 if plagal else 0
+    # if filter:
+    #     print('trying')
+    #     try:
+    #         next_node = filter[depth + 1]
+    #         searchCounter(mode, next_node, cantus, depth + 1, plagal, newNode, filter)
+    #         return
+    #     except Exception:
+    #         pass
+
+    if depth == 0:
+        print('mode is '+str(Note(mode).name))
+        searchCounter(mode, mode-1, cantus, 1, plagal, newNode)
+        searchCounter(mode, mode-1 + 12, cantus, 1, plagal, newNode)
+        return
+    for i in range(0, 12):
+        next_note = (mode - shift + i)
+        interval = abs(next_note - cantus[depth + 1])
+        # if interval == 1:
+        #     continue
+        # if interval == 2:
+        #     continue
+        # if interval == 5:
+        #     continue
+        # if interval == 6:
+        #     continue
+        # if interval == 10:
+        #     continue
+        # if interval == 11:
+        #     continue
+        if filter and filter[depth + 1] != next_note:
+            continue
+
+        searchCounter(mode, mode - shift + i, cantus, depth + 1, plagal, newNode)
+
+
+def prune_sequence(arr, hi, disc, variety, modeRep, cTest=None):
     length = len(arr)
     size = 0
+    setBreak = False
     for i in range(0, length):
         s = arr[i].sequence
         node = arr[i]
         # if node.disc > disc:
         #     continue
-        # if node.hiIndex > len(searched_cf) - hi:
+        # if node.hiIndex > len(s) - 1 - hi:
         #     continue
         # if len(Counter(s).keys()) < variety:
         #     continue
@@ -56,173 +137,109 @@ def pruneCantus(arr, hi, disc, variety, modeRep, cTest=None):
         size = size + 1
         if cTest:
             setBreak = False
-            for k in range(0, 11):
+            if len(s) != len(cTest):
+                raise Exception('Test sequence does not correpond to tree depth')
+            for k in range(0, len(s)):
                 if s[k] != cTest[k]:
                     setBreak = True
                     break
             if setBreak:
                 continue
+            pruned_cf.append(node)
             print('found')
-            print('cf found :'+str(size))
-            node.printNotes()
+            break
             # return
         pruned_cf.append(node)
-        interval = []
         node.printNotes()
-        print(s)
-        print(str(interval) + '\n')
-        print(i)
-    print(size)
-    if cTest and not setBreak:
+    print('pruned found {}'.format(len(pruned_cf)))
+    print(setBreak)
+    if cTest and setBreak:
         print('notFound')
 
 
-def searchCounter(mode, note, cantus, depth, plagal, lastNode=None):
-    # print('starting serch counter '+str(note))
-    # print(depth)
-    print('\n start search '+str(depth))
-    print('sequence '+str(note))
-    if depth == 0:
-        # print('generating counter '+str(note))
-        newNode = Node(note)
-    else:
-        # print('constructing child '+str(note) + ' from :'+str(lastNode.note))
-        newNode = Node(note, lastNode)
-    if not newNode.validMelody(11, True, mode):
-        print('---invalid melody '+str(newNode.sequence))
-        # print(str(note)+' invalid melody')
-        return
-    else:
-        print('---valid melody')
-        print(newNode.sequence)
-    if not newNode.validateVoice1(cantus):
-        # print(str(note)+' invalid counter')
-        print('---invalid counter')
-        return False
-    else:
-        print('---valid counterpoint')
-    if depth + 1 == maxDepth:
-
-        counterP.append(newNode)
-        return
-    shift = 4 if plagal else 0
-    # print('generating children')
-    if depth == 0:
-        print('mode is '+str(Note(mode).name))
-        searchCounter(mode, mode-1, cantus, 1, plagal, newNode)
-        return
-    if depth + 2 == maxDepth:
-        searchCounter(mode, mode, cantus, depth + 1, plagal, newNode)
-        searchCounter(mode, mode + 4, cantus, depth + 1, plagal, newNode)
-        return
-    for i in range(0, 7):
-        interval = (mode - shift + i) - cantus[depth + 1]
-        interval = abs(interval)
-        print('index'+str(i))
-        print('step '+str(depth))
-        print('cantus '+str(cantus[depth]))
-        print('interval' + str(interval))
-
-        if interval == 1:
-            continue
-        if interval == 2:
-            continue
-        if interval == 5:
-            continue
-        if interval == 6:
-            continue
-        if interval == 10:
-            continue
-        if interval == 11:
-            continue
-        searchCounter(mode, mode - shift + i, cantus, depth + 1, plagal, newNode)
-
-
-def GenerateCounter(cantus):
-    searchCounter(cantus[0]+7, cantus[0] + 7, cantus, 0, False)
+def generate_counter(cantus, reverse=True, log=True, filter_debug=None):
+    cantus = cantus.copy()
+    if filter_debug:
+        filter_debug = filter_debug.copy()
+        filter_debug.reverse()
+    if reverse:
+        cantus.reverse()
+    searchCounter(cantus[0], cantus[0] + 12, cantus, 0, False, filter=(filter_debug))
     print('counter found '+str(len(counterP)))
-    for c in counterP:
-        # if pruneCounter(cantus, c):
-        #     continue
-        print('\n')
-        c.printNotes()
-        # print(c.sequence)
-        for i in range(0, 11):
-            if i == 0:
-                new_node = Node(cantus[0])
-                previous = new_node
-            else:
-                new_node = Node(cantus[i], previous)
-                previous = new_node
-        new_node.printNotes()
-        c.sequence.reverse()
-        print(c.sequence)
-        intervals = []
-        for i in range(0, 11):
-            intervals.append(Note.nInterval(
-                                            new_node.sequence[i],
-                                            c.sequence[i]))
-        intervals.reverse()
-        print(intervals)
+    cantus_node = Node.FromSequence(cantus,
+                                    octaveShift=0,
+                                    reverse=False,
+                                    is_cantus=(True))
+    if log:
+        for c in counterP:
+            # if pruneCounter(cantus, c):
+            #     continue
+            print('\n')
+            print('scale mode {}'.format(c.get_scale_mode()))
+            c.printNotes()
+            cantus_node.printNotes()
+            # print(c.sequence)
+            intervals = []
+            for i in range(0, 11):
+                intervals.append(Note.nInterval(
+                                                cantus_node.sequence[i],
+                                                c.sequence[i]))
+            intervals.reverse()
+            print(intervals)
 
 
-def testCounter(seq, cantus, octave=0):
-    for m in range(0, 11):
+def test_sequence(seq, cantus, octave=0):
+    length = len(seq)
+    for m in range(0, length):
         if m == 0:
-            cp = Node(seq[0] + 12*octave)
-            previous = cp
+            cp = Node(seq[0] + 12*octave, debug=True)
         else:
-            cp = Node(seq[m]+12*octave, previous)
-            if not cp.validMelody(11, True, cantus[0]+12*1):
-                print('invalid movement from counterpoint '+str(cp.index))
-                break
-            previous = cp
-        if not cp.validateVoice1(cantus):
-            print('invalid counter point '+str(cp.index))
-            print('note : '+str(cp.note))
-            Note.printSequence(cp.sequence, True)
-            Note.printSequence(cantus[0:len(cp.sequence)], True)
-            Note.printIntervales(cantus[0:len(cp.sequence)], cp.sequence, True)
+            cp = Node(seq[m]+12*octave, lastNode=cp, debug=True)
+        if not cp.validMelody(length, True, cp.get_scale_mode()):
+            break
+        if not cp.valid_cp(cantus):
             break
             # print('validated '+str(seq[m]) + ' at :' + str(cp.index))
-    if len(cp.sequence) == 11:
+    if len(cp.sequence) == length:
         print('valid counter point')
-
+    else:
+        print(cp)
+        print('counter is {} \n'.format(seq))
     return cp
-
-
-s = [2, 5, 4, 2, 7, 5, 9, 7, 5, 4, 2]
-cantus = [1, 3, 2, 1, 4, 3, 5, 4, 3, 2, 1]
-counterDiat = [5, 5, 4, 5, 6, 7, 7, 6, 8, 7, 8]
-counter = [9, 9, 7, 9, 11, 12, 12, 11, 14, 13, 14]
 
 
 def main():
 
+    s = [2, 5, 4, 2, 7, 5, 9, 7, 5, 4, 2]
+    counter = [9, 9, 7, 9, 11, 12, 12, 11, 14, 13, 14]
     if sys.argv[1] == 'scf':
         try:
             if sys.argv[2] == 'prune':
                 prune = True
         except Exception:
             prune = False
-        print(sys.argv[2])
-        SearchCantus(2, 11, False)
+        search_cantus(2, 11, False)
+        # print(serializable_cf_root)
+        # print(serializable_cf_root.toJson())
         s.reverse()
         if prune:
-            pruneCantus(searched_cf, hi=6, disc=3, variety=5, modeRep=3, cTest=s)
+            prune_sequence(searched_cf, hi=1, disc=3, variety=5, modeRep=3, cTest=s)
         print('examples found ' + str(len(searched_cf)))
+        print('examples serialized {}'.format(len(serialized_cf)))
+        print('searched sequence : {}'.format(s))
         print('after prune :' + str(len(pruned_cf)))
-        print('pruneParam {}'.format(prune))
     if sys.argv[1] == 'scp':
-        s.reverse()
-        GenerateCounter(s)
+        filter = counter
+        # filter = None
+        generate_counter(s, log=(True), filter_debug=filter)
+        prune_sequence(counterP, 4, 2, 5, 1, counter)
     if sys.argv[1] == 'tcp':
         s.reverse()
         counter.reverse()
-        testCounter(counter, s, octave=1)
+        test_sequence(counter, s, octave=0)
         print('testCounter')
     if sys.argv[1] == 'tcf':
-        print('testing cf')
+        print('testing cf {}')
         s.reverse()
         debug = debugMode
         for i in range(0, len(s)):
@@ -239,14 +256,6 @@ def main():
                 break
         if not valid:
             print('invalid ' + str(node.sequence))
-        if node.disc > 3:
-            print('disc :' + str(node.disc))
-        if node.hiIndex > 11 - 6:
-            print('invalid hiIndex ' + str(node.hiIndex))
-        if len(Counter(node.sequence).keys()) < 5:
-            print('variety ' + str(len(Counter(node.sequence).keys())))
-        if node.modeRep < 3:
-            print('modeRep :' + str(node.modeRep))
 
 
 if __name__ == '__main__':

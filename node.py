@@ -12,7 +12,6 @@ f_ = failureCases
 class Node:
     def __init__(self, note, lastNode=None, debug=False):
         if debug:
-            print('construct node, debugMode :'+str(debug))
             self.fail = False
         self.note = note
         if lastNode is None:
@@ -49,19 +48,20 @@ class Node:
                 self.failures.append('')
         self.index = len(self.sequence) - 1
         self.debug = debug
-        # print('index '+str(self.index))
         self.root = self.sequence[0]
 
     def partial(self, n):
         subSequence = self.sequence[0:n]
         return Node.FromSequence(subSequence)
 
+    def get_scale_mode(self):
+        return self.root
+
     def debugLog(self, message, details=None):
-        # print('logging {}'.format(message))
         self.fail = True
         index = self.index
         failures = self.failures
-        message = message + '[{}]'.format(self.index)
+        message = message + '[{}]'.format(self.index) + 'value error: {}'.format(self.note)
         if details:
             message = message + ' function :{} '.format(details)
         try:
@@ -69,9 +69,8 @@ class Node:
             failures[index] = log + message
         except Exception:
             failures.append(message)
-        if self.debug:
-            print(self.failures)
-        # print(self.failures)
+        # if self.debug:
+        #     print(self.failures)
 
     def jump(self):
         if self.index == 0:
@@ -79,8 +78,13 @@ class Node:
         return self.note - self.parent
 
     def checkEnd(self, index, note, counterMode, scaleMode):
+        print('checking end {}'.format(self.debug))
+        if self.debug:
+            print('checking End function! {}'.format(scaleMode))
+            print('note is {} '.format(self.note))
+            print('root is :{} '.format(self.root))
         if counterMode:
-            if((scaleMode - 1) - note) % 12 != 0:
+            if self.root - 1 != note:
                 return False
         elif note != Note.diatonicScale(self.root, 1):
             # print('beforeEnd should be root + 1 '+str(self.sequence))
@@ -88,13 +92,20 @@ class Node:
         return True
 
     def checkStart(self, counterMode, scaleMode):
+        print('cacacaca')
+        if self.debug:
+            print(counterMode)
+            print('note is {}'.format(self.note))
+            print('scaleMode is {}'.format(scaleMode))
         note = self.note
         if counterMode:
+            fifth = Note.diatonicScale(scaleMode, 4) % 12
+            print('fifth{}'.format(fifth))
             if abs(note - scaleMode) % 12 == 0:
                 return True
-            if abs(note - scaleMode) % 12 == 7:
+            if (note - fifth) % 12 == 0:
                 return True
-                print(scaleMode)
+                # print(scaleMode)
             # print('start should be mode or mode + 5th ,note is '+str(note))
             return False
         elif note != self.root:
@@ -106,7 +117,7 @@ class Node:
         if Note.equals(note, Note.B.value) and Note.equals(
                                                             self.parent,
                                                             Note.F.value):
-            print('direct tritone '+str(note)+' '+str(self.parent))
+            # print('direct tritone '+str(note)+' '+str(self.parent))
             return False
         if Note.equals(note, Note.F.value) and Note.equals(
                                                           self.parent,
@@ -133,7 +144,7 @@ class Node:
 
     def checkJumpEnd(self):
         if self.index == 2 and self.jump() >= 7:
-            print('.jump down before end')
+            # print('.jump down before end')
             return False
         return True
 
@@ -193,18 +204,20 @@ class Node:
             '''si nota es parent, rompe regla de nota repetida'''
             '''contrapunto tiene permitido repetir a los mas dos'''
             if not self.checkRepetition(counter):
-                print('repeated note')
+                # print('repeated note')
                 if self.debug:
-                    print('entro en: '+str(self.note))
                     self.debugLog(f_.repeated_note, 'checkRepeteadNote')
                 else:
                     return False
+            print('checking here!!!!!!!!!!{}'.format(index))
             if index == 1 and not self.checkEnd(index, note, counter, mode):
                 # print('invalid ending '+str(self.sequence))
                 if self.debug:
                     self.debugLog(f_.bad_ending, 'checkEnd')
                 else:
                     return False
+            else:
+                print('mierda!')
             if not self.checkTritone(note):
                 if self.debug:
                     self.debugLog(f_.tritone, 'triton check')
@@ -289,50 +302,46 @@ class Node:
                     return False
         return True
 
-    def validCP(self, cantusFirmus):
-
+    def valid_cp(self, cantusFirmus):
         index = self.index
         note = self.note
-        reference = cantusFirmus[index]
-        print('index :'+str(index))
+        # print('index :'+str(index))
         if not Note.Consonant(cantusFirmus[index], self.note):
-            # print(cantusFirmus[index])
-            print(reference)
-            print(note)
-            print('disssonance')
+            if self.debug:
+                self.debugLog(f_.dissonance)
             return False
         if index > 0:
             lastInterval = abs(self.parent - cantusFirmus[index-1])
             if lastInterval == 7:
-                if abs(note - cantusFirmus[index]) == 7:
-                    print('parallel fifth')
+                if abs(note - cantusFirmus[index]) == 7 and self.debug:
+                    self.debugLog(f_.parallel5)
+                    # print('parallel fifth')
                     return False
             referenceJump = abs(cantusFirmus[index] - cantusFirmus[index -1])
             if self.jump() != 0 and referenceJump/self.jump() > 0:
-                if lastInterval == 7:
-                    print('direct fifth')
+                if lastInterval == 7 and self.debug:
+                    self.debugLog(f_.direct5)
+                    # print('direct fifth')
                     return False
             if lastInterval == 12:
-                if abs(note - cantusFirmus[index]) == 12:
-                    print('parallel octave')
-                    print(self.sequence)
-                    print(cantusFirmus)
+                if abs(note - cantusFirmus[index]) == 12 and self.debug:
+                    self.debugLog(f_.parallel5)
+                    # print('parallel octave')
                     return False
             if self.jump() != 0 and referenceJump/self.jump() > 0:
-                print('caca '+str(lastInterval))
                 if lastInterval == 0:
-                    if cantusFirmus[index] != note:
-                        print('direct octave')
+                    if cantusFirmus[index] != note and self.debug:
+                        # print('direct octave')
+                        self.debugLog(f_.direct8)
                     return False
-        print('COUNTERPOINT')
-        self.printNotesReverse()
-        print(self.sequence[0:index + 1])
+        elif index == 0:
+            pass
         cfNotes = []
         for n in cantusFirmus:
             cfNotes.append(Note(n % 12).name + str(n//12))
-        print('CANTUS FIRMS    \n:'+str(cfNotes[0:index + 1]))
-        print(cantusFirmus[0:index + 1])
-        print('INTERVAL :'+str(Note.interval(reference, note)))
+        # print('CANTUS FIRMS    \n:'+str(cfNotes[0:index + 1]))
+        # print(cantusFirmus[0:index + 1])
+        # print('INTERVAL :'+str(Note.interval(reference, note)))
         return True
 
     def isChord(self):
@@ -360,8 +369,7 @@ class Node:
         print(seq)
 
     @staticmethod
-    def FromSequence(sequence, octaveShift=0, reverse=True, isCantus=False):
-        failures = ''
+    def FromSequence(sequence, octaveShift=0, reverse=True, is_cantus=False):
         '''avoid shallow copy of sequence'''
         sequence = sequence.copy()
         if reverse:
@@ -374,7 +382,41 @@ class Node:
                 node = Node(sequence[i], lastNode=node, debug=True)
             valid = node.validMelody(
                                      size=len(sequence),
-                                     counter=not isCantus,
+                                     counter=not is_cantus,
                                      mode=node.root)
+        # print('node failures {}:'.format(node.failures))
+        return node
+
+    @staticmethod
+    def debug_cp(input_sequence,
+                 octave_shift=0,
+                 is_cantus=False,
+                 cantus_firmus=None):
+        '''avoid shallow copy of sequence'''
+        sequence = input_sequence.copy()
+        sequence.reverse()
+        cf = cantus_firmus.copy()
+        cf.reverse()
+        for i in range(0, len(sequence)):
+            if i == 0:
+                node = Node(sequence[0] + 12*octave_shift, debug=True)
+            else:
+                node = Node(sequence[i], lastNode=node, debug=True)
+            node.validMelody(
+                             size=len(sequence),
+                             counter=True,
+                             mode=node.root)
+            node.valid_cp(cf)
         print('node failures {}:'.format(node.failures))
         return node
+
+    def __str__(self):
+        numerical = self.sequence
+        notes = []
+        for note in numerical:
+            if note:
+                notes.append(str(Note(note % 12)) + str(note//12))
+            else:
+                notes.append('none')
+        error_log = str(self.failures) if self.debug else ''
+        return str(numerical) + '\nnotes :\n  ' + str(notes) + '\nfailures :\n ' + error_log
