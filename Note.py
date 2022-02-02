@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class Note(Enum):
+class Notes(Enum):
     C = 0
     Cs = 1
     D = 2
@@ -15,145 +15,268 @@ class Note(Enum):
     As = 10
     B = 11
 
-    @staticmethod
-    def equals(note1, note2):
-        return (note1 - note2) % 12 == 0
 
-    @staticmethod
-    def isWhite(note):
-        note = note % 12
-        if note <= 4:
-            if note % 2 == 0:
-                return True
-            return False
-        else:
-            if note % 2 == 0:
-                return False
-            return True
+def equals(note1, note2):
+    return (note1 - note2) % 12 == 0
 
-    @staticmethod
-    def absoluteInterval(note1, note2):
-        return abs(note1 - note2) % 12
 
-    @staticmethod
-    def diatonicScale(root, step):
-        if step == 0:
-            return root
-        if step > 0:
-            for i in range(1, step + 1):
-                succ = 2 if (root % 12 != 4 and root % 12 != 11) else 1
-                root = root + succ
-            return root
-        for i in range(1, (-step) + 1):
-            succ = -2 if (root % 12 != 0 and root % 12 != 5) else -1
-            root = root + succ
-        return root
-
-    @staticmethod
-    def interval(fr, to):
-        s = str(abs(to - fr)+1)
-        s_ = (to - fr) % 12
-        if abs(to - fr)+1 < 10:
-            s = ' ' + s
-        if s_ < 5:
-            if s_ == 0:
-                return s + 'A'
-            if s_ % 2 == 0:
-                s = s + 'M'
-            else:
-                s = s + 'm'
-        else:
-            if s_ == 5 or s_ == 7 or s_ == 0:
-                return s + 'A'
-            if s_ == 6:
-                return s + 'Ag'
-            if s_ < 12:
-                if s_ % 2 == 0:
-                    s = s + 'm'
-                else:
-                    s = s + 'M'
-        return s
-
-    @staticmethod
-    def nInterval(note1, note2):
-        return abs(note2 - note1) % 12
-
-    @staticmethod
-    def printSequence(s, reverse):
-        if reverse:
-            s = s.copy()
-            s.reverse()
-            string = ''
-        count = 0
-        for n in s:
-            coeff = '0' if int(n/10) == 0 else ''
-            if count != 0:
-                string = string + ',   '+coeff + str(n)
-            else:
-                string = ' ' + coeff + str(n)
-            count = count + 1
-        print(string)
-
-    @staticmethod
-    def printIntervales(s1, s2, reverse):
-        s = []
-        if reverse:
-            s1 = s1.copy()
-            s2 = s2.copy()
-            s1.reverse()
-            s2.reverse()
-        for i in range(0, len(s1)):
-            s.append(Note.nInterval(s1[i], s2[i]))
-        print(s)
-
-    @staticmethod
-    def Consonant(note1, note2, debug=False):
-        interval = Note.nInterval(note1, note2)
-        if interval != 12:
-            interval = interval % 12
-        if interval == 12:
-            if debug:
-                print('8va consonance')
+def is_white(note):
+    note = note % 12
+    if note <= 4:
+        if note % 2 == 0:
             return True
-        if interval == 0:
-            if debug:
-                print(' '+str(note1)+','+str(note2))
-            return True
-        if interval == 7:
-            if debug:
-                print(str(interval)+' st consonance '+str(note1)+','+str(note2))
-            return True
-        if interval == 12:
-            if debug:
-                print(str(interval)+' st consonance '+str(note1)+','+str(note2))
-            return True
-        if interval == 3:
-            if debug:
-                print(str(interval)+' st consonance '+str(note1)+','+str(note2))
-            return True
-        if interval == 4:
-            if debug:
-                print(str(interval)+' st consonance '+str(note1)+','+str(note2))
-            return True
-        if interval == 8:
-            if debug:
-                print(str(interval)+' st consonance '+str(note1)+','+str(note2))
-            return True
-        if interval == 9:
-            if debug:
-                print(str(interval)+' st consonance '+str(note1)+','+str(note2))
-            return True
-        if debug:
-            print(
-                 str(interval)+' st disonance ' +
-                 Note(note1 % 12).name + ',' + Note(note2 % 12).name)
-        if debug:
-            print(str(note1)+' '+str(note2))
         return False
+    else:
+        if note % 2 == 0:
+            return False
+        return True
 
-    @staticmethod
-    def unison(note1, note2):
-        return note1 == note2
+
+def print_sequence(s):
+    if s is None:
+        return
+    s_ = []
+    for i in range(len(s)):
+        if s[i] is None:
+            continue
+        st = '('
+        for j in range(len(s[i])):
+            note = Notes(s[i][j] % 12).name + str(s[i][j]//12)
+            st += ', {}'.format(note)
+        st = st + ')'
+        s_.append(st)
+    print(s_)
+
+
+
+def ninterval(note1, note2):
+    return abs(note1 - note2)
+
+
+def succesor(note):
+    """ succesor regresa la siguiente nota mayor o igual que note"""
+    if is_white(note + 1):
+        return note + 1
+    return note + 2
+
+
+def antecesor(note):
+    if is_white(note - 1):
+        return note - 1
+    return note - 2
+
+
+def white_scale(root, step):
+    if step == 0:
+        return root
+    if step > 0:
+        return succesor(white_scale(root, step - 1))
+    return antecesor(white_scale(root, step + 1))
+
+
+def str_interval(fr, to):
+    s = str(abs(to - fr)+1)
+    s_ = (to - fr) % 12
+    if abs(to - fr)+1 < 10:
+        s = ' ' + s
+    if s_ < 5:
+        if s_ == 0:
+            return s + 'A'
+        if s_ % 2 == 0:
+            s = s + 'M'
+        else:
+            s = s + 'm'
+    else:
+        if s_ == 5 or s_ == 7 or s_ == 0:
+            return s + 'A'
+        if s_ == 6:
+            return s + 'Ag'
+        if s_ < 12:
+            if s_ % 2 == 0:
+                s = s + 'm'
+            else:
+                s = s + 'M'
+    return s
+
+
+def interval(note1, note2, modulo12=True):
+    return abs(note1 - note2) % (12 if modulo12 else 1)
+
+
+def interval_table(s1, s2, reverse):
+    s = []
+    if reverse:
+        s1 = s1.copy()
+        s2 = s2.copy()
+        s1.reverse()
+        s2.reverse()
+    for i in range(0, len(s1)):
+        s.append(interval(s1[i], s2[i]))
+
+
+def consonance(note1, note2, imperfect=False):
+    inter = interval_12(note1, note2)
+
+    if inter == 0:
+        return True
+    if inter == 7:
+        return True
+    if inter == 3:
+        return True
+    if inter == 4:
+        return True
+    if inter == 8:
+        return True
+    if inter == 9:
+        return True
+    if inter == 5 and imperfect:
+        return True
+    return False
+
+
+def valid_chord(chord):
+    print('chord received {}'.format(chord))
+    chord.sort()
+    min = chord[0]
+    chord = map(lambda x: (x - min) % 12, chord)
+    chord = list(dict.fromkeys(chord))
+    intervals = []
+    for i in range(1, len(chord)):
+        intervals.append(chord[i] - chord[i - 1])
+    """ unison """
+    if len(intervals) == 0:
+        return True
+    first = intervals[0]
+    ln = len(intervals)
+    print('checking chord', chord)
+    print(intervals)
+    if ln == 1:
+        if first == 3 or first == 4 or first == 7 or first == 8 or first == 9:
+            return True
+        return False
+    if ln == 2:
+        if first == 3:
+            if intervals[1] == 4 or intervals[1] == 5 or intervals[1] == 6:
+                return True
+        if first == 4:
+            if intervals[1] == 3 or intervals[1] == 5:
+                return True
+        return False
+    return False
+
+
+def dissonance(note1, note2):
+    return not consonance(note1, note2)
+
+
+def unison(note1, note2):
+    return note1 == note2
+
+
+def clamp(note, ceiling):
+    while(note > ceiling):
+        note -= 12
+    return note
+
+
+def print_chord(chord):
+    if chord is None:
+        return
+    ar = []
+    for note in chord:
+        ar.append(Notes(note % 12).name + str(note//12))
+    print(ar)
+
+
+def chord(note, ceiling, **filter):
+    major = filter.get('major')
+    accend = filter.get('ag')
+    filterthird = filter.get('3rd')
+    filterfifth = filter.get('5th')
+    filterroot = filter.get('root')
+    chord = []
+    if not filterroot:
+        chord.append(note)
+        if note + 12 <= ceiling:
+            chord.append(note + 12)
+    if not filterthird:
+        if major:
+            third = note + 4
+        else:
+            third = white_scale(note, 2)
+        if third > ceiling:
+            third -= 12
+        chord.append(third)
+    if not filterfifth:
+        fifth = white_scale(note, 4)
+        if fifth > ceiling:
+            fifth -= 12
+        chord.append(fifth)
+    if accend is not None:
+        for i in range(0, len(chord)):
+            if (chord[i] - accend) % 12 == 0:
+                chord[i] = clamp(chord[i] + 1, ceiling)
+    return chord
+
+
+def fifth(note, ceiling):
+    fifth = white_scale(note, 4)
+    if fifth > ceiling:
+        fifth -= 12
+    return fifth
+
+
+def degree(note, n, ceiling, **filter):
+    nth = white_scale(note, n - 1)
+    if nth > ceiling:
+        nth -= 12
+    return chord(nth, ceiling, **filter)
+
+
+def note_range(root, octaves=1, **filter):
+    rng = []
+    chord = filter.get('chord')
+    consonance = filter.get('consonances') or chord
+    white_notes = filter.get('whites')
+    filter_note = filter.get('!note')
+    sib = filter.get('add_sib')
+    top = root + 12 * octaves
+    for note in range(root, root + 12*octaves + 1):
+        if consonance and not consonance(root, note):
+            continue
+        if chord:
+            if interval(root, note) == 8 or interval(root, note) == 9:
+                continue
+        if white_notes and not is_white(note):
+            continue
+        if filter_note and equals(note, filter_note):
+            continue
+        rng.append(note)
+    if filter.get('major'):
+        rng.remove(white_scale(root, 3))
+        rng.append(root + 4)
+    if sib:
+        for i in range(0, octaves + 1):
+            sib = 10
+            sib = root + ((sib - root) % 12) + 12 * i
+            if sib <= top:
+                rng.append(sib)
+    return rng
+
+
+def in_chord(note, chord):
+    ''' returns true if note matches%12 any note in chord'''
+    for i in range(0, len(chord)):
+        if equals(note, chord[i]):
+            return True
+    return False
+
+
+def chord_matches(chord1, chord2):
+    for note in chord1:
+        if not in_chord(note, chord2):
+            return False
+    return True
 
 
 class Diatonic(Enum):
@@ -179,9 +302,18 @@ class Diatonic(Enum):
         return (note12 + note12//5) // 2 + 7*oct
 
     @staticmethod
-    def interval(note1, note2):
+    def interval(note1, note2, debug=True):
+        # if debug:
+        #     print('note is ', note1)
+        #     print('note is ', note2)
         note1 = Diatonic.index(note1)
         note2 = Diatonic.index(note2)
+        #
+        # if debug:
+        #     print('index1', note1)
+        #     print('index2', note2)
+        #     print('interval is ', note2 - note1)
+
         return note2 - note1
 
 

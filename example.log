@@ -1,0 +1,30 @@
+DEBUG:root:Parent Node 14
+DEBUG:root:depth :0                                                root 14
+DEBUG:root:filtering sequence [14, 13, 14, 11, 12, 12, 11, 9, 7, 9, 9]
+DEBUG:root:*node passes tests
+DEBUG:root:Parent Node 14
+DEBUG:root:Parent Node 14
+DEBUG:root:depth :0                                                root 14
+DEBUG:root:filtering sequence [14, 13, 14, 11, 12, 12, 11, 9, 7, 9, 9]
+DEBUG:root:*node passes tests
+DEBUG:root:Parent Node 14
+DEBUG:root:Parent Node 14
+DEBUG:root:depth :0                                                root 14
+DEBUG:root:filtering sequence [14, 13, 14, 11, 12, 12, 11, 9, 7, 9, 9]
+DEBUG:root:*node passes tests
+DEBUG:root:Parent Node 14
+DEBUG:root:depth :0                                                root 14
+DEBUG:root:filtering sequence [14, 13, 14, 11, 12, 12, 11, 9, 7, 9, 9]
+DEBUG:root:*node passes tests
+DEBUG:root:note inspected 13 thread :[14]
+DEBUG:root:depth :1                                                root 14
+DEBUG:root:filtering sequence [14, 13, 14, 11, 12, 12, 11, 9, 7, 9, 9]
+DEBUG:root:*node passes tests
+DEBUG:root:Parent Node 14
+DEBUG:root:depth :0                                                root 14
+DEBUG:root:filtering sequence [14, 13, 14, 11, 12, 12, 11, 9, 7, 9, 9]
+DEBUG:root:*node passes tests
+DEBUG:root:note inspected 13 thread :[14]
+DEBUG:root:depth :1                                                root 14
+DEBUG:root:filtering sequence [14, 13, 14, 11, 12, 12, 11, 9, 7, 9, 9]
+DEBUG:root:*node passes tests

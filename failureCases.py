@@ -15,3 +15,31 @@ pairs = 'ABAB'
 bad_movement = 'bM'
 bad_start = 'bS'
 dissonance = 'dS'
+bad_chord = 'bc'
+bad_chord_start = 'bcs'
+bad_note = 'bN'
+unison = 'un'
+repetedintervals = 'ri'
+
+{
+    'p5': 'parallelfifth',
+    'p8': 'paralleloctave',
+    'd5': 'directfifth',
+    'd8': 'directoctave',
+    'R': 'noteRepetition',
+    'ag4': 'tritone',
+    'mTR': 'middleTritone',
+    'iTR': 'isolatedTritone',
+    'bE': 'badending',
+    '6M': 'majSixth',
+    'j': 'jump',
+    'SQ': 'sequence',
+    'ABAB': 'pairs',
+    'bM': "badMovement",
+    'bS': 'badStart',
+    'dS': "dissonance",
+    'bc': "badChord",
+    'bcs': "badChordStart",
+    'bN': "badNote",
+    'un': 'unison',
+    'ri': 'repeatedintervals'}

@@ -1,13 +1,13 @@
 from node import Node
-from collections import Counter
-from Note import Note
+import Note
 import sys
 from tree import SNode
-from Examples import cf_examples
-
+import logging
+import random
 
 
 searched_cf = []
+
 serialized_cf = []
 js = []
 pruned_cf = []
@@ -16,246 +16,312 @@ counterP = []
 debug_mode = True
 debug_break_search = True
 
+logger = logging.getLogger('treeSearch')
+logging.basicConfig(filename='example.log', level=logging.DEBUG)
+filehandler_dbg = logging.FileHandler(logger.name + '-debug.log', mode='w')
 
-def search(note, depth, maxDepth, plagal, lastNode=None, serializable=None):
-    debug = debugMode
-    if depth == 0:
-        new_node = Node(note, debug=debug)
-        # nodeS = SNode(value=Note, parent=None)
-        # js.append(nodeS)
-    else:
-        new_node = Node(note, lastNode=lastNode, debug=debug)
-        # nodeS = SNode(value=note, parent=serializable)
-    if not new_node.validMelody(size=11, counter=False, mode=new_node.root):
-        return
-    if depth + 1 == maxDepth:
-        searched_cf.append(new_node)
-        return
-    shift = 5 if plagal else 0
-    root = new_node.root
-    if depth + 2 == maxDepth:
-        search(
-               note=new_node.root,
-               depth=depth + 1,
-               maxDepth=maxDepth,
-               plagal=plagal,
-               lastNode=new_node,
-               serializable=None)
-        return
-
-    for i in range(0, 7):
-        newNote = Note.diatonicScale(root - shift, i)
-        search(
-                note=newNote,
-                depth=depth + 1,
-                maxDepth=maxDepth,
-                plagal=plagal,
-                lastNode=new_node,
-                serializable=None)
+"""constants"""
+Notes = Note.Notes
+sib = Notes.As
 
 
-def search_cantus(initial, length, plagal):
-    step = 0
-    print('search called')
-    search(initial, step, length, plagal, lastNode=None, serializable=None)
-    print('search halt')
+class Voice:
+
+    def __init__(self, modo, octave, index=0, _range=1,
+                 length=11, plagal=False, debug=False):
+        self.index = index
+        self.length = length
+        self.is_cantus_firmus = (index == 0)
+        self.modo = modo % 12 + 12 * octave
+        self.floor = self.modo if not plagal else self.modo - 7
+        self.ceiling = self.floor + _range * 12
+        self.plagal = plagal
+        self.pool = []
+
+    def is_cantus(self):
+        return self.index == 0
+
+    def range(self):
+        octaves = (self.ceiling - self.floor) // 12
+        return Note.note_range(self.floor, octaves, **{'add_sib': True,
+                               'whites': True})
+
+    def found(self):
+        return len(self.pool) > 0
+
+    def start(self):
+        if self.is_cantus():
+            return [self.modo]
+        filter = {'3rd': True}
+        return Note.degree(self.modo, 1, self.ceiling - 1, **filter)
+
+    def cadence(self):
+        if self.is_cantus():
+            return [Note.white_scale(self.modo, 1)]
+        if self.index == 1:
+            return [self.modo - 1, self.modo + 12]
+        note = self.modo
+        kwargs = {'ag': note - 2}
+        return Note.degree(note=note, n=7, ceiling=self.ceiling, **kwargs)
+
+    def endings(self):
+        if self.is_cantus():
+            return [self.modo]
+        filter = {'major': True}
+        return Note.degree(self.modo, n=1, ceiling=self.ceiling, **filter)
+
+    def add(self, node):
+        try:
+            self.pool.append(node)
+        except Exception:
+            self.pool = {node}
+
+    def size(self):
+        return len(self.pool)
+
+    def get_notes(self, index=None):
+        assert(self.pool is not None)
+        return self.pool[-1 if index is None else index]
+
+    def __str__(self):
+        index = 'cf' if self.index == 0 else self.index
+        string = 'modo: {}, value {}'.format(Notes(self.modo%12), self.modo)
+        string += '\n\tindex: {}'.format(index)
+        string += '\n\tlength: {}'.format(self.length)
+        string += '\n\tplagal: {}'.format(self.plagal)
+        return string
 
 
-def searchCounter(mode, note, cantus, depth, plagal, lastNode=None, filter=None):
-    if debug_break_search:
-        input("Press enter to continue :\n")
-    print('new note {}'.format(note) + ' thread :{}'.format(lastNode.sequence if lastNode else ''))
-    if filter:
-        print('step {}'.format(depth))
-        print('filter {}'.format(filter))
-    if depth == 0:
-        newNode = Node(note, debug=debug_mode)
-    else:
-        newNode = Node(note, lastNode,  debug=debug_mode)
-    if not newNode.validMelody(11, True, mode):
-        # print('---invalid melody '+str(newNode.sequence))
-        return
-    if not newNode.valid_cp(cantus):
-        # print('---invalid counter')
-        return
-    else:
-        print('valid {}'.format(note))
-    if depth + 1 == maxDepth:
-        counterP.append(newNode)
-        return
-    shift = 4 if plagal else 0
-    # if filter:
-    #     print('trying')
-    #     try:
-    #         next_node = filter[depth + 1]
-    #         searchCounter(mode, next_node, cantus, depth + 1, plagal, newNode, filter)
-    #         return
-    #     except Exception:
-    #         pass
+class TreeSearch:
 
-    if depth == 0:
-        print('mode is '+str(Note(mode).name))
-        searchCounter(mode, mode-1, cantus, 1, plagal, newNode)
-        searchCounter(mode, mode-1 + 12, cantus, 1, plagal, newNode)
-        return
-    for i in range(0, 12):
-        next_note = (mode - shift + i)
-        interval = abs(next_note - cantus[depth + 1])
-        # if interval == 1:
-        #     continue
-        # if interval == 2:
-        #     continue
-        # if interval == 5:
-        #     continue
-        # if interval == 6:
-        #     continue
-        # if interval == 10:
-        #     continue
-        # if interval == 11:
-        #     continue
-        if filter and filter[depth + 1] != next_note:
-            continue
+    def __init__(self, modo=Notes.D, length=11, plagal=False,
+                 num_voices=1, debug=False, sequential=False,
+                 tree_search=False):
+        self.modo = modo.value
+        self.length = length
+        self.plagal = plagal
+        self.num_voices = num_voices
+        self.voices = []
+        self.sequential = sequential
+        self.tree_search = tree_search
+        self.debug = debug
+        print(self)
+        for i in range(num_voices):
+            self.add_voice(i, _range=1, octave=i)
 
-        searchCounter(mode, mode - shift + i, cantus, depth + 1, plagal, newNode)
+    class Parameters:
+        def __init__(self, instance, **kwargs):
+            print('init paramters')
+            kwargs['hiIndex'] = kwargs.get('hiIndex', 1 * instance.length // 2)
+            kwargs['disc'] = kwargs.get('disc', 3)
+            kwargs['modeRep'] = kwargs.get('modeRep', 3)
+            kwargs['variety'] = kwargs.get('variety', 5)
+            print(kwargs)
+            self.high_index = kwargs.get('hiIndex')
+            self.discontinuities = kwargs.get('disc')
+            self.modeRep = kwargs.get('modeRep')
+            self.variety = kwargs.get('variety')
 
-
-def prune_sequence(arr, hi, disc, variety, modeRep, cTest=None):
-    length = len(arr)
-    size = 0
-    setBreak = False
-    for i in range(0, length):
-        s = arr[i].sequence
-        node = arr[i]
-        # if node.disc > disc:
-        #     continue
-        # if node.hiIndex > len(s) - 1 - hi:
-        #     continue
-        # if len(Counter(s).keys()) < variety:
-        #     continue
-        # if node.modeRep < modeRep:
-        #     continue
-        size = size + 1
-        if cTest:
-            setBreak = False
-            if len(s) != len(cTest):
-                raise Exception('Test sequence does not correpond to tree depth')
-            for k in range(0, len(s)):
-                if s[k] != cTest[k]:
-                    setBreak = True
-                    break
-            if setBreak:
+    def to_chord(self, *args, omit=None):
+        '''selects a sequence from each voice's tree, default sequence is last generated, then creates a chord array '''
+        chord = []
+        sequences = []
+        for i in range(len(self.voices)):
+            if omit == i:
                 continue
-            pruned_cf.append(node)
-            print('found')
-            break
-            # return
-        pruned_cf.append(node)
-        node.printNotes()
-    print('pruned found {}'.format(len(pruned_cf)))
-    print(setBreak)
-    if cTest and setBreak:
-        print('notFound')
+            try:
+                selected = args[i]
+            except Exception:
+                selected = None
+            voice = self.voices[i]
+            try:
+                sequences.append(voice.get_notes(index=selected))
+            except Exception:
+                pass
 
+        for j in range(self.length):
+            ch = []
+            for i in range(len(sequences)):
+                ch.append(sequences[i].sequence[j])
+            chord.append(ch)
+        # input()
+        return chord
 
-def generate_counter(cantus, reverse=True, log=True, filter_debug=None):
-    cantus = cantus.copy()
-    if filter_debug:
-        filter_debug = filter_debug.copy()
-        filter_debug.reverse()
-    if reverse:
-        cantus.reverse()
-    searchCounter(cantus[0], cantus[0] + 12, cantus, 0, False, filter=(filter_debug))
-    print('counter found '+str(len(counterP)))
-    cantus_node = Node.FromSequence(cantus,
-                                    octaveShift=0,
-                                    reverse=False,
-                                    is_cantus=(True))
-    if log:
-        for c in counterP:
-            # if pruneCounter(cantus, c):
-            #     continue
-            print('\n')
-            print('scale mode {}'.format(c.get_scale_mode()))
-            c.printNotes()
-            cantus_node.printNotes()
-            # print(c.sequence)
-            intervals = []
-            for i in range(0, 11):
-                intervals.append(Note.nInterval(
-                                                cantus_node.sequence[i],
-                                                c.sequence[i]))
-            intervals.reverse()
-            print(intervals)
+    def add_voice(self, index, _range, octave):
+        voice = Voice(modo=self.modo,
+                      octave=octave,
+                      index=index,
+                      _range=_range,
+                      length=self.length)
+        print('adding voice {}'.format(voice))
+        try:
+            self.voices[index] = voice
+        except Exception:
+            self.voices.append(voice)
 
+    def push_node(self, index, node):
+        '''commit node object to selected voice's pool'''
+        self.voices[index].add(node)
 
-def test_sequence(seq, cantus, octave=0):
-    length = len(seq)
-    for m in range(0, length):
-        if m == 0:
-            cp = Node(seq[0] + 12*octave, debug=True)
+    def generate_voices(self):
+        '''recursively generate a treesearch using previously generated voices as reference or cantusFirmus'''
+        for i in range(0, len(self.voices)):
+            firmus = self.voices[0:i]
+            self.search_voice(self.voices[i], cf=firmus)
+
+    # def generate_second_species(self):
+    #     self.search_voice(self.voices[0])
+    #     cf = self.voices.get
+    #     for note in self.voices[]
+
+    def display_voices(self, tree=False, size=3):
+        '''display '''
+        if not tree:
+            for v in self.voices:
+                if v.found():
+                    print(v.get_notes())
         else:
-            cp = Node(seq[m]+12*octave, lastNode=cp, debug=True)
-        if not cp.validMelody(length, True, cp.get_scale_mode()):
-            break
-        if not cp.valid_cp(cantus):
-            break
-            # print('validated '+str(seq[m]) + ' at :' + str(cp.index))
-    if len(cp.sequence) == length:
-        print('valid counter point')
-    else:
-        print(cp)
-        print('counter is {} \n'.format(seq))
-    return cp
+            for v in self.voices:
+                size = min(size, len(v.pool))
+                for i in range(size):
+                    print(v.pool[i])
+
+    def search_voice(self, voice, cf=None):
+        # input()
+        voice_index = voice.index
+        start_ = voice.start()
+        range_ = voice.range()
+        cadence_ = voice.cadence()
+        endings_ = voice.endings()
+        num_voices_ = self.num_voices
+        length_ = self.length
+        sequential_ = self.sequential
+        found_break = not self.tree_search
+        chord = self.to_chord(omit=voice_index)
+
+        print(sequential_)
+
+        # print(range_)
+
+        # print(cadence_)
+
+        test_cf = [2,5,3,2,7,5,9,7,5,4,2]
+        test_cf = [2,5,4,2,7,5,9,7,5,4,2]
+        test_cp = [9,9,7,9,11,12,12,11,14,13,14]
+        test_cp = test_cf = None
+
+        def search(note, depth=0, last_node=None):
+            if test_cp and voice_index != 0:
+                note = test_cp[depth]
+            elif test_cf and voice_index == 0:
+                note = test_cf[depth]
+            if depth == 0:
+                node = Node(voice, note, debug=self.debug, ref=chord)
+                last_chord = None
+            else:
+                node = last_node.create_child(note)
+                last_chord = chord[depth - 1] + [last_node.note]
+            new_chord = chord[depth] + [node.note]
+            # print(' \nexploring node {}'.format(node))
+            # print('chord {}'.format(new_chord))
+            if not node.is_valid(num_voices_, new_chord, last_chord):
+                print('---------------------------')
+                return
+            if depth + 1 == length_:
+                if voice_index == 0:
+                    if not self.prune_node(node):
+                        return
+                else:
+                    if not self.prune_node(node, disc=3, modeRep=2, variety=5, high=length_//3):
+                        return
+                print('PUSHING NODE')
+                self.push_node(voice_index, node)
+                if found_break:
+                    return True
+            if depth + 1 == length_ - 2:
+                # print('cadence')
+                inspect_set = cadence_
+            elif depth + 1 == length_ - 1:
+                inspect_set = endings_
+            else:
+                inspect_set = range_
+
+            for n in inspect_set:
+                n_ = random.choice(inspect_set) if not sequential_ else n
+                if n == node.note and voice_index == 0:
+                    continue
+                # if voice_index == 1 and n in chord[depth + 1]:
+                #     continue
+                found = search(note=n_, depth=depth + 1, last_node=node)
+                if found and found_break:
+                    return True
+
+        for i in range(len(start_)):
+            print('\nvoice {} search start'.format(voice_index))
+            found = search(start_[i])
+            print('{} node(s) found for voice {}'.format(voice.size(),
+                                                       voice_index))
+            if found:
+                # input()
+                break
+        self.display_voices()
+
+    def __str__(self):
+        return 'search info \n\t modo {}   \n\t sequential {} \
+            \n\t treeSearch {}'.format(
+            self.modo, self.sequential, self.tree_search)
+
+    def prune_node(self, node, **kwargs):
+
+        disc = kwargs.get('disc')
+        modeRep = kwargs.get('modeRep')
+        variety = kwargs.get('variety')
+        high_index = kwargs.get('high')
+
+        if not high_index:
+            high_index = self.parameters.high_index
+        if not disc:
+            disc = self.parameters.discontinuities
+        if not modeRep:
+            modeRep = self.parameters.modeRep
+        if not variety:
+            variety = self.parameters.variety
+        if kwargs.get('debug'):
+            params = {'disc': disc,
+                      'modeRep': modeRep,
+                      'variety': variety,
+                      'hi': high_index}
+            print(params)
+            input()
+
+        if node.disc > disc:
+            # print('disc > ', disc)
+            # input()
+            return False
+        if node.hiIndex < high_index:
+            # print('hiindex <', high_index)
+            # input()
+            return False
+        if len(dict.fromkeys(node.sequence)) < variety:
+            # print('variety <', variety)
+            # input()
+            return False
+        if node.modeRep < modeRep:
+            # print('mode rep <', modeRep)
+            # input()
+            return False
+        return True
+
 
 
 def main():
 
-    s = [2, 5, 4, 2, 7, 5, 9, 7, 5, 4, 2]
-    counter = [9, 9, 7, 9, 11, 12, 12, 11, 14, 13, 14]
-    if sys.argv[1] == 'scf':
-        try:
-            if sys.argv[2] == 'prune':
-                prune = True
-        except Exception:
-            prune = False
-        search_cantus(2, 11, False)
-        # print(serializable_cf_root)
-        # print(serializable_cf_root.toJson())
-        s.reverse()
-        if prune:
-            prune_sequence(searched_cf, hi=1, disc=3, variety=5, modeRep=3, cTest=s)
-        print('examples found ' + str(len(searched_cf)))
-        print('examples serialized {}'.format(len(serialized_cf)))
-        print('searched sequence : {}'.format(s))
-        print('after prune :' + str(len(pruned_cf)))
-    if sys.argv[1] == 'scp':
-        filter = counter
-        # filter = None
-        generate_counter(s, log=(True), filter_debug=filter)
-        prune_sequence(counterP, 4, 2, 5, 1, counter)
-    if sys.argv[1] == 'tcp':
-        s.reverse()
-        counter.reverse()
-        test_sequence(counter, s, octave=0)
-        print('testCounter')
-    if sys.argv[1] == 'tcf':
-        print('testing cf {}')
-        s.reverse()
-        debug = debugMode
-        for i in range(0, len(s)):
-            if i == 0:
-                print('start node')
-                node = Node(s[0], debug=debug)
-            else:
-                print('node from parent')
-                node = Node(s[i], lastNode=node, debug=debug)
-            valid = node.validMelody(len(s))
-            print('{} is valid {}'.format(node.sequence, valid))
-            if not valid:
-                print(node.failures)
-                break
-        if not valid:
-            print('invalid ' + str(node.sequence))
+    new_search = TreeSearch(modo=Notes.D, length=11, plagal=False,
+                            tree_search=False, num_voices=2, debug=False,
+                            sequential=(False))
+    params = {}
+    new_search.parameters = TreeSearch.Parameters(new_search, **params)
+    new_search.generate_voices()
 
 
 if __name__ == '__main__':

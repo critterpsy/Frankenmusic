@@ -20,3 +20,16 @@
           <Note.La__: 19>
             <Note.Si__: 20>
             <Note.Do___: 21>
+
+  quintas directas:
+  *con arreglo no en reverso por definicion es:
+  --- cf_move = cf - cf_-1
+  --- cp_move = cp - cp_-1
+  --- if interval = interval(cf, cp) is 5th or 8ave then:
+        valid &=  sign(cf_move) != sign(cp_move)
+  * en orden reverso quedaria:
+  --- if sign(cf_move) == sign(cp_point) then:
+        valid &= interval is not perfect consonance i.e 5th or octave
+
+
+  --saltos haciendo arcords, inversiones validas
