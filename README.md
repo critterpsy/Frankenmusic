@@ -1,178 +1,159 @@
-# Frankenmusic — Motor de Generación de Contrapunto Renacentista
+# Frankenmusic — Renaissance Counterpoint Generation Engine
 
-Frankenmusic es un **motor de generación automática de composiciones polifónicas** basado en búsqueda en árbol (depth-first search) que respeta las reglas estrictas del contrapunto renacentista según los principios de **Knud Jeppesen**.
+Frankenmusic is an **automatic polyphonic composition engine** based on depth-first tree search, implementing the strict rules of Renaissance counterpoint as defined by **Knud Jeppesen**.
 
-## ¿Qué es?
+## Overview
 
-Un sistema que genera **voces complementarias de contrapunto** (CP) que se ajustan a un *cantus firmus* (CF) existente, o genera cantus firmus válidos desde cero. Todas las composiciones generadas cumplen con:
+The system generates valid **counterpoint voices (CP)** against an existing *cantus firmus* (CF), or generates valid cantus firmi from scratch. All compositions comply with:
 
-- **~15 reglas melódicas**: tritono, saltos prohibidos, movimiento directo, repeticiones, etc.
-- **~5 reglas armónicas**: quintas y octavas paralelas, consonancia, sensible en cadencias, etc.
-- **Métricas de calidad**: variedad de notas, posición de clímax, discontinuidades controladas
+- **~15 melodic rules**: tritone avoidance, forbidden leaps, contrary motion, repetition limits, etc.
+- **~5 harmonic rules**: parallel fifths/octaves, consonance requirements, leading tone resolution, etc.
+- **Quality metrics**: note variety, climax placement, controlled melodic discontinuities
 
-## Características Principales
+## Features
 
-### Modos Soportados
-Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian, incluyendo opción plagal.
+### Supported Modes
+Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian — including plagal variants.
 
-### Especies de Contrapunto
-- **1ª especie** (nota contra nota): implementada completamente
-- **2ª–3ª especies** (estructura básica, sin soporte de disonancias aún)
-- **4ª especie** (suspensiones): no implementado
-- **5ª especie** (florida): no implementado
+### Counterpoint Species
+- **1st species** (note against note): fully implemented
+- **2nd–3rd species** (basic structure): implemented without dissonance support
+- **4th species** (suspensions): planned
+- **5th species** (florid): planned
 
-### Salida
-- Secuencias de notas válidas almacenadas en memoria
-- Exportación a archivos MIDI (notación moderna o período)
-- Matrices de acordes multi-voz
+### Output
+- Valid note sequences stored in memory
+- MIDI file export (modern or period notation)
+- Multi-voice chord matrices
 
-## Estructura del Proyecto
+## Project Structure
 
 ```
 .
-├── src/                      # Núcleo del motor
-│   ├── node.py              # Validación de reglas (15+ métodos)
-│   ├── Note.py              # Utilidades musicales
-│   ├── tree.py              # Serialización (minimal)
+├── src/                      # Engine core
+│   ├── node.py              # Rule validation (15+ methods)
+│   ├── Note.py              # Music theory utilities
+│   ├── tree.py              # Serialization
 │   └── mathutils.py         # Helpers
 ├── treeSearch.py            # TreeSearch + Voice classes
-├── tests/                   # Suite de pruebas
-│   ├── test.py              # Tests ejecutables
-│   └── Examples.py          # Ejemplos de validad/invalidez
-├── docs/                    # Documentación de reglas
-│   ├── backlog_reglas.md    # Comparación Jeppesen vs código
+├── tests/                   # Test suite
+│   ├── test.py              # Executable tests
+│   └── Examples.py          # Valid/invalid sequence examples
+├── docs/                    # Rule documentation
+│   ├── backlog_reglas.md    # Jeppesen theory vs. implementation comparison
 │   ├── jeppesen_contrapunto_reglas.md
 │   └── jeppesen_contrapunto_especieN.md
-├── notebooks/               # Ejemplos interactivos
-│   └── play.ipynb           # (MIDI manipulation)
+├── notebooks/               # Interactive examples
+│   └── play.ipynb
 ├── output/
-│   └── midis/               # Archivos generados
-└── README.md                # Este archivo
+│   └── midis/               # Generated MIDI files
+└── README.md
 ```
 
-## Cómo Usar
+## Usage
 
-### Generar un Cantus Firmus
+### Generate a Cantus Firmus
 
 ```python
 from treeSearch import TreeSearch, Voice
 from src.Note import ScaleMode
 
-# Inicializar búsqueda
 ts = TreeSearch()
 
-# Crear una voz en modo Dórico
 voice = Voice(
     mode=ScaleMode.Dorian,
     index=0,
     length=8,
-    range_bottom=60,  # MIDI note
+    range_bottom=60,  # MIDI note number
     range_top=72
 )
 
-# Buscar secuencias válidas
 voice.search(ts)
 
-# Acceder a soluciones
 for sequence in voice.pool:
-    print(sequence)  # Lista de notas
+    print(sequence)
 ```
 
-### Validar Contrapunto contra Cantus Firmus
+### Validate Counterpoint Against a Cantus Firmus
 
 ```python
 from src.node import Node
 
-# Crear nodo raíz para contrapunto
 cp_node = Node(
-    note=65,           # nota inicial CP
+    note=65,
     parent=None,
-    cf_sequence=[60, 62, 65, ...],  # CF conocido
+    cf_sequence=[60, 62, 65, ...],
     cp_index=0,
     mode=ScaleMode.Dorian,
-    is_cf=False        # Es contrapunto, no CF
+    is_cf=False
 )
 
-# Validar nota siguiente
 next_note = 67
 is_valid = cp_node.check_note(next_note)
 ```
 
-## Reglas Implementadas
+## Implemented Rules
 
-### Reglas Melódicas (Cantus Firmus)
+### Melodic Rules (Cantus Firmus)
 
-| Regla | Estado | Función |
-|-------|--------|---------|
-| Inicio en tónica | ✅ | `check_note()` |
-| Final en tónica | ✅ | `check_note()` |
-| Cadencia: penúltima = 2º grado | ✅ | `check_note()` |
-| Tritono melódico directo prohibido | ✅ | `checkTritoneInside()` |
-| Tritono entre pivotes prohibido | ✅ | `checkTritoneIsolated()` |
-| Saltos de 7ª prohibidos | ✅ | `check_jump()` |
-| Salto de tritono prohibido | ✅ | `check_jump()` |
-| Movimiento contrario obligatorio tras salto | ✅ | `check_movement()` |
-| No repetición excesiva | ✅ | `check_repetition()` |
-| Evitar secuencias melódicas repetidas | ✅ | `check_sequences()` |
+| Rule | Status | Function |
+|------|--------|----------|
+| Start on tonic | ✅ | `check_note()` |
+| End on tonic | ✅ | `check_note()` |
+| Penultimate = 2nd degree | ✅ | `check_note()` |
+| Direct tritone forbidden | ✅ | `checkTritoneInside()` |
+| Outlined tritone forbidden | ✅ | `checkTritoneIsolated()` |
+| Seventh leaps forbidden | ✅ | `check_jump()` |
+| Tritone leap forbidden | ✅ | `check_jump()` |
+| Contrary motion required after leap | ✅ | `check_movement()` |
+| No excessive repetition | ✅ | `check_repetition()` |
+| No repeated melodic sequences | ✅ | `check_sequences()` |
 
-### Reglas Armónicas (Contrapunto vs CF)
+### Harmonic Rules (Counterpoint vs CF)
 
-| Regla | Estado | Función |
-|-------|--------|---------|
-| Quintas directas prohibidas | ✅ | `check_direct5()` |
-| Octavas directas prohibidas | ✅ | `check_direct8()` |
-| Intervalos repetidos 4+ consecutivos | ✅ | `checkrepintervals()` |
-| Cadencia: sensible → tónica (voz superior) | ✅ | `check_chord()` |
+| Rule | Status | Function |
+|------|--------|----------|
+| Direct fifths forbidden | ✅ | `check_direct5()` |
+| Direct octaves forbidden | ✅ | `check_direct8()` |
+| 4+ consecutive repeated intervals | ✅ | `checkrepintervals()` |
+| Leading tone → tonic resolution | ✅ | `check_chord()` |
 
-### Reglas No Implementadas
+### Planned Rules
 
-- ⏳ Paralelas de 5ª/8ª (vs directas)
-- ⏳ Consonancia obligatoria en cada tiempo (1ª especie)
-- ⏳ Disonancias preparadas/resueltas (2ª–3ª especies)
-- ⏳ Suspensiones (4ª especie)
-- ⏳ Mezcla de duraciones (5ª especie)
+- ⏳ Parallel fifths/octaves (vs. direct)
+- ⏳ Mandatory consonance on each beat (1st species)
+- ⏳ Prepared and resolved dissonances (2nd–3rd species)
+- ⏳ Suspensions (4th species)
+- ⏳ Mixed note values (5th species)
 
-## Problemas Conocidos
+## Known Limitations
 
-### Bugs Activos
-1. `check_sequences()` genera falsos positivos en ejemplos modales (Dorico, Frigio, Mixolidio)
-2. `check_note()` rechaza cadencias válidas en modo Frigio (raíz en posición -3)
-3. `check_jump()` rechaza 6ª menor descendente válida en CP
+- `check_sequences()` produces false positives in certain modal contexts (Dorian, Phrygian, Mixolydian)
+- Cadence validation in Phrygian mode rejects some valid progressions
+- `check_jump()` incorrectly rejects valid descending minor sixths in CP
 
-### Deuda Técnica
-- Cientos de `print()` de debug distribuidos en paths críticos
-- Documentación escasa (pocos docstrings)
-- Método `Node.FromSequence()` roto e incompatible
-- Generador `generate_second_species()` nunca completado
-
-## Ejecución de Tests
+## Running Tests
 
 ```bash
-cd /Users/daniel/Documents/Frankenmusic
 python3 tests/test.py
 ```
 
-Resultado esperado: **4 tests pasan**, documentados en `CF_KNOWN_BUGS` y `CP_KNOWN_BUGS`.
-
-## Documentación Detallada
-
-- **[backlog_reglas.md](docs/backlog_reglas.md)** — Comparación punto-a-punto entre teoría Jeppesen e implementación
-- **[jeppesen_contrapunto_reglas.md](docs/jeppesen_contrapunto_reglas.md)** — Reglas generales
-- **[jeppesen_contrapunto_especieN.md](docs/)** — Especificaciones por especie (1–5)
+Expected result: **4 tests pass**. Known edge cases are documented in `CF_KNOWN_BUGS` and `CP_KNOWN_BUGS` within the test file.
 
 ## Roadmap
 
-- [ ] Eliminar/reemplazar `print()` por logging estructurado
-- [ ] Arreglar falsos positivos en `check_sequences()`
-- [ ] Arreglar validación de cadencias en Frigio
-- [ ] Implementar disonancias de paso (2ª–3ª especies)
-- [ ] Soporte de 4ª especie (suspensiones)
-- [ ] Soporte de 5ª especie (florida)
+- [ ] Replace debug `print()` statements with structured logging
+- [ ] Fix false positives in `check_sequences()` for modal contexts
+- [ ] Fix Phrygian cadence validation
+- [ ] Implement passing dissonances (2nd–3rd species)
+- [ ] Implement 4th species (suspensions)
+- [ ] Implement 5th species (florid counterpoint)
 
-## Autor
+## Author
 
-**Daniel** — Frankenmusic Project
+**Daniel Ritter Miller**
+[linkedin.com/in/daniel-ritter-miller-0368252a8](https://linkedin.com/in/daniel-ritter-miller-0368252a8)
 
 ---
 
-*Última actualización: Marzo 2026*
+*Last updated: March 2026*
