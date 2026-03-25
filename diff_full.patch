@@ -1,0 +1,380 @@
+diff --git a/dump.sh b/dump.sh
+index 7febdf7..1f018d0 100755
+--- a/dump.sh
++++ b/dump.sh
+@@ -1,18 +1,17 @@
+ #!/bin/bash
+ 
+-# Script to create a monolith of all Python code in the repository
+-# Concatenates all .py files into monolith.py with file separators for AI analysis
+-
+-output="monolith.py"
+-
+-# Clear the output file
++output="python_dump.txt"
+ > "$output"
+ 
+-# Find all .py files, excluding __pycache__ directories
+-find . -name "*.py" -type f -not -path "./*/__pycache__/*" | while read -r file; do
+-    echo "# ===== File: $file =====" >> "$output"
++find . -name "*.py" -type f \
++  -not -path "./*/__pycache__/*" \
++  -not -path "./.venv/*" \
++  -not -path "./venv/*" \
++  -not -name "$output" \
++| while read -r file; do
++    echo "===== File: $file =====" >> "$output"
+     cat "$file" >> "$output"
+     echo "" >> "$output"
+-done
++  done
+ 
+-echo "Monolith created in $output"
+\ No newline at end of file
++echo "Dump created in $output"
+\ No newline at end of file
+diff --git a/generate_counterpoint.py b/generate_counterpoint.py
+index d3b98ba..5423b44 100755
+--- a/generate_counterpoint.py
++++ b/generate_counterpoint.py
+@@ -120,8 +120,8 @@ def main():
+                         help='Modo debug (default: False)')
+     parser.add_argument('--sequential', action='store_true',
+                         help='Búsqueda secuencial (default: False)')
+-    parser.add_argument('--tree_search', action='store_true',
+-                        help='Búsqueda en árbol (default: False)')
++    parser.add_argument('--exhaustive_search', action='store_true',
++                        help='Continuar buscando más allá del primer resultado (default: False)')
+     parser.add_argument('--export_midi', action='store_true',
+                         help='Exportar a archivo MIDI (requiere mido)')
+     parser.add_argument('--midi_filename', type=str, default='',
+@@ -150,7 +150,7 @@ def main():
+     try:
+         ts = TreeSearch(modo=modo, length=args.length, plagal=args.plagal,
+                         num_voices=args.num_voices, debug=args.debug,
+-                        sequential=args.sequential, tree_search=args.tree_search)
++                        sequential=args.sequential, exhaustive_search=args.exhaustive_search)
+ 
+         print("\n  Buscando secuencias...")
+         ts.generate_voices()
+@@ -162,7 +162,9 @@ def main():
+             if not args.midi_filename:
+                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                 args.midi_filename = f"output/midis/counterpoint_{args.modo}_{args.length}n_{args.num_voices}v_{timestamp}.mid"
+-            os.makedirs(os.path.dirname(args.midi_filename), exist_ok=True)
++            dirname = os.path.dirname(args.midi_filename)
++            if dirname:
++                os.makedirs(dirname, exist_ok=True)
+             midi_path = export_to_midi(ts.voices, args.midi_filename)
+             if midi_path:
+                 abs_path = os.path.abspath(midi_path)
+diff --git a/src/failureCases.py b/src/failureCases.py
+index b19fd21..4391358 100644
+--- a/src/failureCases.py
++++ b/src/failureCases.py
+@@ -21,7 +21,7 @@ bad_note = 'bN'
+ unison = 'un'
+ repetedintervals = 'ri'
+ 
+-{
++FAILURE_LABELS = {
+     'p5': 'parallelfifth',
+     'p8': 'paralleloctave',
+     'd5': 'directfifth',
+@@ -42,4 +42,5 @@ repetedintervals = 'ri'
+     'bcs': "badChordStart",
+     'bN': "badNote",
+     'un': 'unison',
+-    'ri': 'repeatedintervals'}
++    'ri': 'repeatedintervals',
++}
+diff --git a/src/node.py b/src/node.py
+index 5ebc12b..d0f66bd 100644
+--- a/src/node.py
++++ b/src/node.py
+@@ -199,7 +199,19 @@ class Node:
+         return True
+ 
+     def check_jump(self):
+-        ''' checa si el salto es valido, i.e intervalo permitido'''
++        '''Valida que el intervalo melódico esté dentro de los permitidos.
++
++        Prohibido para todas las voces:
++          - 6 semitonos (tritono / cuarta aumentada) — también cubierto por checkTritoneInside
++          - 9 semitonos (sexta mayor)
++          - 10 semitonos (séptima menor)
++          - 11 semitonos (séptima mayor)
++          - > 12 semitonos
++
++        Prohibido solo en el cantus firmus:
++          - 8 semitonos DESCENDENTES (sexta menor descendente)
++            Decisión intencional: la sexta menor ASCENDENTE sí está permitida en CF.
++        '''
+         if self.index == 0:
+             return True
+         jump = abs(self.jump())
+@@ -378,6 +390,11 @@ class Node:
+             else:
+                 yield ('checkdirect5', True)
+ 
++            if not Note.consonance(self.note, cf_):
++                yield (f_.dissonance, False)
++            else:
++                yield (f_.dissonance, True)
++
+             if not self.check_chord(chord, 2):
+                 yield ('checkchord', False)
+             else:
+diff --git a/tests/Examples.py b/tests/Examples.py
+index c11ab0f..4b554ad 100644
+--- a/tests/Examples.py
++++ b/tests/Examples.py
+@@ -116,6 +116,34 @@ badJump = Example(sequence=seq, note7=False, failures=failures)
+ cf_fail_examples.append(badJump)
+ 
+ 
++# --- Decisión intencional: sexta menor en CF ---
++# Sexta menor ASCENDENTE (8 semitonos arriba) en CF: PERMITIDA
++# A(9)→F_upper(17)→E_upper(16)→D_upper(14)→B(11)→A(9)
++# El salto A(9)→F(17) es una sexta menor ascendente (8 st) en modo A.
++# Penúltima=B(11)=white_scale(9,1) ✓; final=A(9)=modo ✓
++seq = [9, 17, 16, 14, 11, 9]
++minor6_asc = Example(sequence=seq, note7=False, failures=None,
++                     name='CF_minor6th_ascending_allowed')
++cf_examples.append(minor6_asc)
++
++# Sexta menor DESCENDENTE (8 semitonos abajo) en CF: PROHIBIDA
++# Ab(8) → C(0): descenso de 8 semitonos en el CF debe fallar check_jump
++seq = [8, 0, 10, 8]
++failures = [(f_.badJump, 1)]
++minor6_desc = Example(sequence=seq, note7=False, failures=failures,
++                      name='CF_minor6th_descending_prohibited')
++cf_fail_examples.append(minor6_desc)
++
++# --- Decisión intencional: compensación tras salto ---
++# CF inválido: salto ascendente > 2ª sin compensar (continúa subiendo)
++# C(0) → E(4) → G(7): E→G sigue subiendo después de C→E, viola check_movement
++seq = [0, 4, 7, 5, 2, 0]
++failures = [(f_.bad_movement, 2)]
++no_compensation = Example(sequence=seq, note7=False, failures=failures,
++                          name='CF_no_compensation_after_leap')
++cf_fail_examples.append(no_compensation)
++
++
+ ''' example = D0, F0, E0, D0, G0, F0, A0, G0, F0, E0, RE'''
+ # reference_cf = random.choice(cf_examples).sequence
+ reference_cf = cf_examples[0].sequence
+diff --git a/tests/test.py b/tests/test.py
+index 3d87d9d..9b9c920 100644
+--- a/tests/test.py
++++ b/tests/test.py
+@@ -2,8 +2,6 @@ import unittest
+ import sys
+ import os
+ 
+-import pytest
+-
+ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ 
+ from tests import Examples
+diff --git a/treeSearch.py b/treeSearch.py
+index 85c781e..2d48d45 100644
+--- a/treeSearch.py
++++ b/treeSearch.py
+@@ -6,19 +6,7 @@ import logging
+ import random
+ 
+ 
+-searched_cf = []
+-
+-serialized_cf = []
+-js = []
+-pruned_cf = []
+-maxDepth = 11
+-counterP = []
+-debug_mode = True
+-debug_break_search = True
+-
+ logger = logging.getLogger('treeSearch')
+-logging.basicConfig(filename='example.log', level=logging.DEBUG)
+-filehandler_dbg = logging.FileHandler(logger.name + '-debug.log', mode='w')
+ 
+ """constants"""
+ Notes = Note.Notes
+@@ -71,10 +59,7 @@ class Voice:
+         return Note.degree(self.modo, n=1, ceiling=self.ceiling, **filter)
+ 
+     def add(self, node):
+-        try:
+-            self.pool.append(node)
+-        except Exception:
+-            self.pool = {node}
++        self.pool.append(node)
+ 
+     def size(self):
+         return len(self.pool)
+@@ -96,14 +81,14 @@ class TreeSearch:
+ 
+     def __init__(self, modo=Notes.D, length=11, plagal=False,
+                  num_voices=1, debug=False, sequential=False,
+-                 tree_search=False):
++                 exhaustive_search=False):
+         self.modo = modo.value
+         self.length = length
+         self.plagal = plagal
+         self.num_voices = num_voices
+         self.voices = []
+         self.sequential = sequential
+-        self.tree_search = tree_search
++        self.exhaustive_search = exhaustive_search
+         self.debug = debug
+         self.parameters = self.Parameters(self)
+         logger.debug('%s', self)
+@@ -124,28 +109,19 @@ class TreeSearch:
+ 
+     def to_chord(self, *args, omit=None):
+         '''selects a sequence from each voice's tree, default sequence is last generated, then creates a chord array '''
+-        chord = []
+         sequences = []
+         for i in range(len(self.voices)):
+             if omit == i:
+                 continue
+-            try:
+-                selected = args[i]
+-            except Exception:
+-                selected = None
+-            voice = self.voices[i]
+-            try:
+-                sequences.append(voice.get_notes(index=selected))
+-            except Exception:
+-                pass
+-
+-        for j in range(self.length):
+-            ch = []
+-            for i in range(len(sequences)):
+-                ch.append(sequences[i].sequence[j])
+-            chord.append(ch)
+-        # input()
+-        return chord
++            if not self.voices[i].found():
++                continue
++            selected = args[i] if i < len(args) else None
++            sequences.append(self.voices[i].get_notes(index=selected))
++
++        return [
++            [sequences[k].sequence[j] for k in range(len(sequences))]
++            for j in range(self.length)
++        ]
+ 
+     def add_voice(self, index, _range, octave):
+         voice = Voice(modo=self.modo,
+@@ -169,6 +145,30 @@ class TreeSearch:
+             firmus = self.voices[0:i]
+             self.search_voice(self.voices[i], cf=firmus)
+ 
++    def _note_name(self, num):
++        octave = num // 12
++        name = Notes(num % 12).name
++        return f"{name}{octave}"
++
++    def display_voice_found(self, voice_index):
++        '''Muestra un log limpio de las voces encontradas hasta voice_index'''
++        voice = self.voices[voice_index]
++        label = "CF" if voice.is_cantus() else f"CP{voice_index}"
++        count = voice.size()
++        seq = voice.pool[0].sequence if voice.found() else []
++        notes = "  ".join(f"{self._note_name(n):>4}" for n in seq)
++        print(f"  [{label}] {count} secuencia(s) → {notes}")
++
++        if voice_index > 0:
++            cf = self.voices[0]
++            if cf.found():
++                cf_seq = cf.pool[0].sequence
++                cf_notes = "  ".join(f"{self._note_name(n):>4}" for n in cf_seq)
++                cp_seq = seq
++                cp_notes = "  ".join(f"{self._note_name(n):>4}" for n in cp_seq)
++                print(f"  CF  →  {cf_notes}")
++                print(f"  CP  →  {cp_notes}")
++
+     def display_voices(self, tree=False, size=3):
+         '''display '''
+         if not tree:
+@@ -191,25 +191,12 @@ class TreeSearch:
+         num_voices_ = self.num_voices
+         length_ = self.length
+         sequential_ = self.sequential
+-        found_break = not self.tree_search
++        stop_on_first = not self.exhaustive_search
+         chord = self.to_chord(omit=voice_index)
+ 
+         logger.debug('sequential: %s', sequential_)
+ 
+-        # print(range_)
+-
+-        # print(cadence_)
+-
+-        test_cf = [2,5,3,2,7,5,9,7,5,4,2]
+-        test_cf = [2,5,4,2,7,5,9,7,5,4,2]
+-        test_cp = [9,9,7,9,11,12,12,11,14,13,14]
+-        test_cp = test_cf = None
+-
+         def search(note, depth=0, last_node=None):
+-            if test_cp and voice_index != 0:
+-                note = test_cp[depth]
+-            elif test_cf and voice_index == 0:
+-                note = test_cf[depth]
+             if depth == 0:
+                 node = Node(voice, note, debug=self.debug, ref=chord)
+                 last_chord = None
+@@ -230,8 +217,9 @@ class TreeSearch:
+                         return
+                 logger.debug('PUSHING NODE')
+                 self.push_node(voice_index, node)
+-                if found_break:
++                if stop_on_first:
+                     return True
++                return
+             if depth + 1 == length_ - 2:
+                 # print('cadence')
+                 inspect_set = cadence_
+@@ -247,7 +235,7 @@ class TreeSearch:
+                 # if voice_index == 1 and n in chord[depth + 1]:
+                 #     continue
+                 found = search(note=n_, depth=depth + 1, last_node=node)
+-                if found and found_break:
++                if found and stop_on_first:
+                     return True
+ 
+         for i in range(len(start_)):
+@@ -257,12 +245,12 @@ class TreeSearch:
+             if found:
+                 # input()
+                 break
+-        self.display_voices()
++        self.display_voice_found(voice_index)
+ 
+     def __str__(self):
+         return 'search info \n\t modo {}   \n\t sequential {} \
+-            \n\t treeSearch {}'.format(
+-            self.modo, self.sequential, self.tree_search)
++            \n\t exhaustive_search {}'.format(
++            self.modo, self.sequential, self.exhaustive_search)
+ 
+     def prune_node(self, node, **kwargs):
+ 
+@@ -306,15 +294,3 @@ class TreeSearch:
+ 
+ 
+ 
+-def main():
+-
+-    new_search = TreeSearch(modo=Notes.D, length=11, plagal=False,
+-                            tree_search=False, num_voices=2, debug=False,
+-                            sequential=(False))
+-    params = {}
+-    new_search.parameters = TreeSearch.Parameters(new_search, **params)
+-    new_search.generate_voices()
+-
+-
+-if __name__ == '__main__':
+-    main()

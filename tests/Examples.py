@@ -116,6 +116,34 @@ badJump = Example(sequence=seq, note7=False, failures=failures)
 cf_fail_examples.append(badJump)
 
 
+# --- Decisión intencional: sexta menor en CF ---
+# Sexta menor ASCENDENTE (8 semitonos arriba) en CF: PERMITIDA
+# A(9)→F_upper(17)→E_upper(16)→D_upper(14)→B(11)→A(9)
+# El salto A(9)→F(17) es una sexta menor ascendente (8 st) en modo A.
+# Penúltima=B(11)=white_scale(9,1) ✓; final=A(9)=modo ✓
+seq = [9, 17, 16, 14, 11, 9]
+minor6_asc = Example(sequence=seq, note7=False, failures=None,
+                     name='CF_minor6th_ascending_allowed')
+cf_examples.append(minor6_asc)
+
+# Sexta menor DESCENDENTE (8 semitonos abajo) en CF: PROHIBIDA
+# Ab(8) → C(0): descenso de 8 semitonos en el CF debe fallar check_jump
+seq = [8, 0, 10, 8]
+failures = [(f_.badJump, 1)]
+minor6_desc = Example(sequence=seq, note7=False, failures=failures,
+                      name='CF_minor6th_descending_prohibited')
+cf_fail_examples.append(minor6_desc)
+
+# --- Decisión intencional: compensación tras salto ---
+# CF inválido: salto ascendente > 2ª sin compensar (continúa subiendo)
+# C(0) → E(4) → G(7): E→G sigue subiendo después de C→E, viola check_movement
+seq = [0, 4, 7, 5, 2, 0]
+failures = [(f_.bad_movement, 2)]
+no_compensation = Example(sequence=seq, note7=False, failures=failures,
+                          name='CF_no_compensation_after_leap')
+cf_fail_examples.append(no_compensation)
+
+
 ''' example = D0, F0, E0, D0, G0, F0, A0, G0, F0, E0, RE'''
 # reference_cf = random.choice(cf_examples).sequence
 reference_cf = cf_examples[0].sequence

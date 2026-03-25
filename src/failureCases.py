@@ -21,7 +21,7 @@ bad_note = 'bN'
 unison = 'un'
 repetedintervals = 'ri'
 
-{
+FAILURE_LABELS = {
     'p5': 'parallelfifth',
     'p8': 'paralleloctave',
     'd5': 'directfifth',
@@ -42,4 +42,5 @@ repetedintervals = 'ri'
     'bcs': "badChordStart",
     'bN': "badNote",
     'un': 'unison',
-    'ri': 'repeatedintervals'}
+    'ri': 'repeatedintervals',
+}

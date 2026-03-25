@@ -120,8 +120,8 @@ def main():
                         help='Modo debug (default: False)')
     parser.add_argument('--sequential', action='store_true',
                         help='Búsqueda secuencial (default: False)')
-    parser.add_argument('--tree_search', action='store_true',
-                        help='Búsqueda en árbol (default: False)')
+    parser.add_argument('--exhaustive_search', action='store_true',
+                        help='Continuar buscando más allá del primer resultado (default: False)')
     parser.add_argument('--export_midi', action='store_true',
                         help='Exportar a archivo MIDI (requiere mido)')
     parser.add_argument('--midi_filename', type=str, default='',
@@ -150,7 +150,7 @@ def main():
     try:
         ts = TreeSearch(modo=modo, length=args.length, plagal=args.plagal,
                         num_voices=args.num_voices, debug=args.debug,
-                        sequential=args.sequential, tree_search=args.tree_search)
+                        sequential=args.sequential, exhaustive_search=args.exhaustive_search)
 
         print("\n  Buscando secuencias...")
         ts.generate_voices()
@@ -162,7 +162,9 @@ def main():
             if not args.midi_filename:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 args.midi_filename = f"output/midis/counterpoint_{args.modo}_{args.length}n_{args.num_voices}v_{timestamp}.mid"
-            os.makedirs(os.path.dirname(args.midi_filename), exist_ok=True)
+            dirname = os.path.dirname(args.midi_filename)
+            if dirname:
+                os.makedirs(dirname, exist_ok=True)
             midi_path = export_to_midi(ts.voices, args.midi_filename)
             if midi_path:
                 abs_path = os.path.abspath(midi_path)

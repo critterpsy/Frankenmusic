@@ -6,19 +6,7 @@ import logging
 import random
 
 
-searched_cf = []
-
-serialized_cf = []
-js = []
-pruned_cf = []
-maxDepth = 11
-counterP = []
-debug_mode = True
-debug_break_search = True
-
 logger = logging.getLogger('treeSearch')
-logging.basicConfig(filename='example.log', level=logging.DEBUG)
-filehandler_dbg = logging.FileHandler(logger.name + '-debug.log', mode='w')
 
 """constants"""
 Notes = Note.Notes
@@ -71,10 +59,7 @@ class Voice:
         return Note.degree(self.modo, n=1, ceiling=self.ceiling, **filter)
 
     def add(self, node):
-        try:
-            self.pool.append(node)
-        except Exception:
-            self.pool = {node}
+        self.pool.append(node)
 
     def size(self):
         return len(self.pool)
@@ -96,14 +81,14 @@ class TreeSearch:
 
     def __init__(self, modo=Notes.D, length=11, plagal=False,
                  num_voices=1, debug=False, sequential=False,
-                 tree_search=False):
+                 exhaustive_search=False):
         self.modo = modo.value
         self.length = length
         self.plagal = plagal
         self.num_voices = num_voices
         self.voices = []
         self.sequential = sequential
-        self.tree_search = tree_search
+        self.exhaustive_search = exhaustive_search
         self.debug = debug
         self.parameters = self.Parameters(self)
         logger.debug('%s', self)
@@ -123,29 +108,34 @@ class TreeSearch:
             self.variety = kwargs.get('variety')
 
     def to_chord(self, *args, omit=None):
-        '''selects a sequence from each voice's tree, default sequence is last generated, then creates a chord array '''
-        chord = []
+        '''Build a chord array from all found voices.
+
+        For each voice at index ``i``, picks the sequence at positional
+        argument ``args[i]``. If ``i >= len(args)`` (no index passed for
+        that voice), the last generated sequence is used (pool[-1]).
+
+        Voices that have not yet produced any result are silently skipped
+        and do not appear in the output.
+
+        ``omit`` excludes a specific voice index; used internally during
+        search to build the reference chord without the voice being searched.
+
+        Returns a list of ``self.length`` chord snapshots, each a list of
+        note values (one per included voice) at that time step.
+        '''
         sequences = []
         for i in range(len(self.voices)):
             if omit == i:
                 continue
-            try:
-                selected = args[i]
-            except Exception:
-                selected = None
-            voice = self.voices[i]
-            try:
-                sequences.append(voice.get_notes(index=selected))
-            except Exception:
-                pass
+            if not self.voices[i].found():
+                continue
+            selected = args[i] if i < len(args) else None
+            sequences.append(self.voices[i].get_notes(index=selected))
 
-        for j in range(self.length):
-            ch = []
-            for i in range(len(sequences)):
-                ch.append(sequences[i].sequence[j])
-            chord.append(ch)
-        # input()
-        return chord
+        return [
+            [sequences[k].sequence[j] for k in range(len(sequences))]
+            for j in range(self.length)
+        ]
 
     def add_voice(self, index, _range, octave):
         voice = Voice(modo=self.modo,
@@ -169,6 +159,30 @@ class TreeSearch:
             firmus = self.voices[0:i]
             self.search_voice(self.voices[i], cf=firmus)
 
+    def _note_name(self, num):
+        octave = num // 12
+        name = Notes(num % 12).name
+        return f"{name}{octave}"
+
+    def display_voice_found(self, voice_index):
+        '''Muestra un log limpio de las voces encontradas hasta voice_index'''
+        voice = self.voices[voice_index]
+        label = "CF" if voice.is_cantus() else f"CP{voice_index}"
+        count = voice.size()
+        seq = voice.pool[0].sequence if voice.found() else []
+        notes = "  ".join(f"{self._note_name(n):>4}" for n in seq)
+        print(f"  [{label}] {count} secuencia(s) → {notes}")
+
+        if voice_index > 0:
+            cf = self.voices[0]
+            if cf.found():
+                cf_seq = cf.pool[0].sequence
+                cf_notes = "  ".join(f"{self._note_name(n):>4}" for n in cf_seq)
+                cp_seq = seq
+                cp_notes = "  ".join(f"{self._note_name(n):>4}" for n in cp_seq)
+                print(f"  CF  →  {cf_notes}")
+                print(f"  CP  →  {cp_notes}")
+
     def display_voices(self, tree=False, size=3):
         '''display '''
         if not tree:
@@ -191,25 +205,14 @@ class TreeSearch:
         num_voices_ = self.num_voices
         length_ = self.length
         sequential_ = self.sequential
-        found_break = not self.tree_search
+        # exhaustive_search=False (default): stop at the first valid sequence found.
+        # exhaustive_search=True: keep exploring and accumulate all valid sequences.
+        stop_on_first = not self.exhaustive_search
         chord = self.to_chord(omit=voice_index)
 
         logger.debug('sequential: %s', sequential_)
 
-        # print(range_)
-
-        # print(cadence_)
-
-        test_cf = [2,5,3,2,7,5,9,7,5,4,2]
-        test_cf = [2,5,4,2,7,5,9,7,5,4,2]
-        test_cp = [9,9,7,9,11,12,12,11,14,13,14]
-        test_cp = test_cf = None
-
         def search(note, depth=0, last_node=None):
-            if test_cp and voice_index != 0:
-                note = test_cp[depth]
-            elif test_cf and voice_index == 0:
-                note = test_cf[depth]
             if depth == 0:
                 node = Node(voice, note, debug=self.debug, ref=chord)
                 last_chord = None
@@ -230,8 +233,9 @@ class TreeSearch:
                         return
                 logger.debug('PUSHING NODE')
                 self.push_node(voice_index, node)
-                if found_break:
+                if stop_on_first:
                     return True
+                return
             if depth + 1 == length_ - 2:
                 # print('cadence')
                 inspect_set = cadence_
@@ -247,7 +251,7 @@ class TreeSearch:
                 # if voice_index == 1 and n in chord[depth + 1]:
                 #     continue
                 found = search(note=n_, depth=depth + 1, last_node=node)
-                if found and found_break:
+                if found and stop_on_first:
                     return True
 
         for i in range(len(start_)):
@@ -257,12 +261,12 @@ class TreeSearch:
             if found:
                 # input()
                 break
-        self.display_voices()
+        self.display_voice_found(voice_index)
 
     def __str__(self):
         return 'search info \n\t modo {}   \n\t sequential {} \
-            \n\t treeSearch {}'.format(
-            self.modo, self.sequential, self.tree_search)
+            \n\t exhaustive_search {}'.format(
+            self.modo, self.sequential, self.exhaustive_search)
 
     def prune_node(self, node, **kwargs):
 
@@ -306,15 +310,3 @@ class TreeSearch:
 
 
 
-def main():
-
-    new_search = TreeSearch(modo=Notes.D, length=11, plagal=False,
-                            tree_search=False, num_voices=2, debug=False,
-                            sequential=(False))
-    params = {}
-    new_search.parameters = TreeSearch.Parameters(new_search, **params)
-    new_search.generate_voices()
-
-
-if __name__ == '__main__':
-    main()

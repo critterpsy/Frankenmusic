@@ -199,7 +199,19 @@ class Node:
         return True
 
     def check_jump(self):
-        ''' checa si el salto es valido, i.e intervalo permitido'''
+        '''Valida que el intervalo melódico esté dentro de los permitidos.
+
+        Prohibido para todas las voces:
+          - 6 semitonos (tritono / cuarta aumentada) — también cubierto por checkTritoneInside
+          - 9 semitonos (sexta mayor)
+          - 10 semitonos (séptima menor)
+          - 11 semitonos (séptima mayor)
+          - > 12 semitonos
+
+        Prohibido solo en el cantus firmus:
+          - 8 semitonos DESCENDENTES (sexta menor descendente)
+            Decisión intencional: la sexta menor ASCENDENTE sí está permitida en CF.
+        '''
         if self.index == 0:
             return True
         jump = abs(self.jump())
@@ -377,6 +389,11 @@ class Node:
                 yield ('checkdirect5', False)
             else:
                 yield ('checkdirect5', True)
+
+            if not Note.consonance(self.note, cf_):
+                yield (f_.dissonance, False)
+            else:
+                yield (f_.dissonance, True)
 
             if not self.check_chord(chord, 2):
                 yield ('checkchord', False)

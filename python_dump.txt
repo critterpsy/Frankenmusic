@@ -1,0 +1,2295 @@
+===== File: ./generate_counterpoint.py =====
+#!/usr/bin/env python3
+"""
+Script para generar contrapuntos desde la consola.
+Uso: python3 generate_counterpoint.py --modo C --length 8 --num_voices 2
+"""
+
+import argparse
+import sys
+import os
+import subprocess
+import shutil
+from datetime import datetime
+
+# Añadir el directorio src al path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+from treeSearch import TreeSearch
+from Note import Notes
+
+try:
+    from mido import MidiFile, MidiTrack, Message, MetaMessage
+    MIDI_AVAILABLE = True
+except ImportError:
+    MIDI_AVAILABLE = False
+    print("Advertencia: mido no está instalado. No se puede exportar a MIDI. Instala con: pip install mido")
+
+SEPARATOR = "─" * 60
+
+def note_name(note_num):
+    """Convierte número de nota a nombre (e.g., 0 -> C4)"""
+    octave = note_num // 12
+    note = Notes(note_num % 12).name
+    return f"{note}{octave}"
+
+def export_to_midi(voices, filename):
+    """Exporta las voces a un archivo MIDI"""
+    if not MIDI_AVAILABLE:
+        print("No se puede exportar: mido no disponible.")
+        return None
+
+    mid = MidiFile()
+
+    for i, voice in enumerate(voices):
+        if not voice.pool:
+            continue
+        track = MidiTrack()
+        mid.tracks.append(track)
+
+        track.append(MetaMessage('track_name', name=f'Voz {i}', time=0))
+
+        seq = voice.pool[0].sequence if hasattr(voice.pool[0], 'sequence') else voice.pool[0]
+
+        for note in seq:
+            track.append(Message('note_on', note=note + 60, velocity=64, time=0))
+            track.append(Message('note_off', note=note + 60, velocity=64, time=480))
+
+    mid.save(filename)
+    return filename
+
+def find_mscore():
+    """Busca el ejecutable de MuseScore en el sistema."""
+    for cmd in ['mscore4', 'mscore3', 'mscore', 'musescore4', 'musescore3', 'musescore']:
+        if shutil.which(cmd):
+            return cmd
+    # macOS app bundle paths
+    for path in [
+        '/Applications/MuseScore 4.app/Contents/MacOS/mscore',
+        '/Applications/MuseScore 3.app/Contents/MacOS/mscore',
+    ]:
+        if os.path.exists(path):
+            return path
+    return None
+
+def open_in_musescore(midi_path):
+    """Abre el archivo MIDI en MuseScore."""
+    mscore = find_mscore()
+    if not mscore:
+        print("\n  [!] MuseScore no encontrado. Instálalo desde https://musescore.org")
+        return
+    abs_path = os.path.abspath(midi_path)
+    print(f"\n  Abriendo en MuseScore: {mscore} \"{abs_path}\"")
+    subprocess.Popen([mscore, abs_path])
+
+def print_results(voices, modo_str, length):
+    print(f"\n{SEPARATOR}")
+    print(f"  RESULTADO  |  Modo: {modo_str}  |  Longitud: {length}")
+    print(SEPARATOR)
+
+    for i, voice in enumerate(voices):
+        label = "Cantus Firmus" if voice.is_cantus() else f"Contrapunto {i}"
+        count = len(voice.pool)
+        print(f"\n  Voz {i} — {label}  ({count} secuencia{'s' if count != 1 else ''} encontrada{'s' if count != 1 else ''})")
+
+        if not voice.pool:
+            print("    (ninguna secuencia válida)")
+            continue
+
+        for j, seq in enumerate(voice.pool[:3]):
+            seq_list = seq.sequence if hasattr(seq, 'sequence') else seq
+            note_names = [note_name(n) for n in seq_list]
+            nums   = "  ".join(f"{n:>3}" for n in seq_list)
+            names  = "  ".join(f"{n:>4}" for n in note_names)
+            marker = "►" if j == 0 else " "
+            print(f"    {marker} [{j+1}]  nums : {nums}")
+            print(f"         notas: {names}")
+
+    print(f"\n{SEPARATOR}")
+
+def main():
+    parser = argparse.ArgumentParser(description='Generar contrapuntos con Frankenmusic')
+    parser.add_argument('--modo', type=str, default='C', choices=['C', 'D', 'E', 'F', 'G', 'A', 'B'],
+                        help='Nota base del modo (default: C)')
+    parser.add_argument('--length', type=int, default=4,
+                        help='Longitud de la secuencia (default: 4)')
+    parser.add_argument('--num_voices', type=int, default=2,
+                        help='Número de voces (default: 2)')
+    parser.add_argument('--plagal', action='store_true',
+                        help='Modo plagal (default: False)')
+    parser.add_argument('--debug', action='store_true',
+                        help='Modo debug (default: False)')
+    parser.add_argument('--sequential', action='store_true',
+                        help='Búsqueda secuencial (default: False)')
+    parser.add_argument('--tree_search', action='store_true',
+                        help='Búsqueda en árbol (default: False)')
+    parser.add_argument('--export_midi', action='store_true',
+                        help='Exportar a archivo MIDI (requiere mido)')
+    parser.add_argument('--midi_filename', type=str, default='',
+                        help='Nombre del archivo MIDI (default: auto-generado)')
+    parser.add_argument('--open_score', action='store_true',
+                        help='Abrir el MIDI en MuseScore tras exportar')
+
+    args = parser.parse_args()
+
+    modo_map = {
+        'C': Notes.C, 'D': Notes.D, 'E': Notes.E, 'F': Notes.F,
+        'G': Notes.G, 'A': Notes.A, 'B': Notes.B
+    }
+    modo = modo_map.get(args.modo.upper(), Notes.C)
+
+    print(f"\n{SEPARATOR}")
+    print(f"  Frankenmusic — Generador de Contrapunto")
+    print(SEPARATOR)
+    print(f"  Modo       : {args.modo}")
+    print(f"  Longitud   : {args.length}")
+    print(f"  Voces      : {args.num_voices}")
+    print(f"  Plagal     : {'Sí' if args.plagal else 'No'}")
+    print(f"  Debug      : {'Sí' if args.debug else 'No'}")
+    print(SEPARATOR)
+
+    try:
+        ts = TreeSearch(modo=modo, length=args.length, plagal=args.plagal,
+                        num_voices=args.num_voices, debug=args.debug,
+                        sequential=args.sequential, tree_search=args.tree_search)
+
+        print("\n  Buscando secuencias...")
+        ts.generate_voices()
+
+        print_results(ts.voices, args.modo, args.length)
+
+        midi_path = None
+        if args.export_midi or args.open_score:
+            if not args.midi_filename:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                args.midi_filename = f"output/midis/counterpoint_{args.modo}_{args.length}n_{args.num_voices}v_{timestamp}.mid"
+            os.makedirs(os.path.dirname(args.midi_filename), exist_ok=True)
+            midi_path = export_to_midi(ts.voices, args.midi_filename)
+            if midi_path:
+                abs_path = os.path.abspath(midi_path)
+                print(f"  MIDI guardado en : {abs_path}")
+                print(f"\n  Para abrir manualmente:")
+                mscore = find_mscore() or "mscore3"
+                print(f"    {mscore} \"{abs_path}\"")
+
+        if args.open_score:
+            if midi_path:
+                open_in_musescore(midi_path)
+            else:
+                print("\n  [!] No se generó MIDI, no se puede abrir el score.")
+
+        if not (args.export_midi or args.open_score) and MIDI_AVAILABLE:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            suggested = f"output/midis/counterpoint_{args.modo}_{args.length}n_{args.num_voices}v_{timestamp}.mid"
+            mscore = find_mscore() or "mscore3"
+            print(f"  Tip: usa --export_midi para guardar el MIDI")
+            print(f"       usa --export_midi --open_score para abrirlo directamente en MuseScore")
+
+        print()
+
+    except Exception as e:
+        print(f"\n  [ERROR] {e}")
+        import traceback
+        traceback.print_exc()
+
+if __name__ == '__main__':
+    main()
+
+===== File: ./tests/__init__.py =====
+
+===== File: ./tests/test.py =====
+import unittest
+import sys
+import os
+
+import pytest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from tests import Examples
+from src.node import Node
+from treeSearch import Voice
+
+
+# Known bugs that cause valid examples to fail validation.
+# Key = sequence tuple, value = reason string.
+CP_KNOWN_BUGS = {}
+
+CF_KNOWN_BUGS = {}
+
+
+def _make_voice(seq, voice_index=0, octave=None):
+    if octave is None:
+        octave = seq[0] // 12
+    return Voice(
+        modo=seq[0] % 12,
+        octave=octave,
+        index=voice_index,
+        _range=1,
+        length=len(seq)
+    )
+
+
+def _validate_cf(seq):
+    """Walk a CF sequence. Returns index of first invalid node, or -1 if all pass."""
+    voice = _make_voice(seq, voice_index=0)
+    node = Node(voice, seq[0])
+    if not node.is_valid(1, []):
+        return 0
+    for i in range(1, len(seq)):
+        node = node.create_child(seq[i])
+        if not node.is_valid(1, []):
+            return i
+    return -1
+
+
+def _validate_cp(cp_seq, cf_seq):
+    """Walk a CP sequence against a CF. Returns index of first invalid node, or -1."""
+    cf_modo = cf_seq[0] % 12
+    cp_voice = Voice(modo=cf_modo, octave=1, index=1, _range=1, length=len(cp_seq))
+    chord_ref = [[note] for note in cf_seq]
+
+    node = Node(cp_voice, cp_seq[0], ref=chord_ref)
+    chord_0 = chord_ref[0] + [cp_seq[0]]
+    if not node.is_valid(2, chord_0):
+        return 0
+    for i in range(1, len(cp_seq)):
+        node = node.create_child(cp_seq[i])
+        new_chord = chord_ref[i] + [cp_seq[i]]
+        last_chord = chord_ref[i - 1] + [cp_seq[i - 1]]
+        if not node.is_valid(2, new_chord, last_chord):
+            return i
+    return -1
+
+
+class TestCF(unittest.TestCase):
+
+    def test_valid_examples(self):
+        for e in Examples.cf_examples:
+            key = tuple(e.sequence)
+            known_bug = CF_KNOWN_BUGS.get(key)
+            if known_bug:
+                # Skip assertion for known bugs — they are tracked in CF_KNOWN_BUGS
+                continue
+            with self.subTest(seq=e.sequence):
+                idx = _validate_cf(e.sequence)
+                self.assertEqual(
+                    idx, -1,
+                    f"Valid CF rejected at index {idx}: {e.sequence}"
+                )
+
+    def test_fail_examples(self):
+        for e in Examples.cf_fail_examples:
+            with self.subTest(seq=e.sequence):
+                idx = _validate_cf(e.sequence)
+                self.assertNotEqual(
+                    idx, -1,
+                    f"Expected CF failure not detected: {e.sequence}"
+                )
+
+
+class TestCP(unittest.TestCase):
+
+    def test_valid_examples(self):
+        cf_seq = Examples.reference_cf
+        for e in Examples.cp_examples:
+            key = tuple(e.sequence)
+            if CP_KNOWN_BUGS.get(key):
+                continue
+            with self.subTest(name=e.name, seq=e.sequence):
+                idx = _validate_cp(e.sequence, cf_seq)
+                self.assertEqual(
+                    idx, -1,
+                    f"Valid CP rejected at index {idx}: {e.sequence}"
+                )
+
+    def test_fail_examples(self):
+        cf_seq = Examples.reference_cf
+        for e in Examples.cp_fail_examples:
+            with self.subTest(name=e.name, seq=e.sequence):
+                idx = _validate_cp(e.sequence, cf_seq)
+                self.assertNotEqual(
+                    idx, -1,
+                    f"Expected CP failure not detected: {e.sequence}"
+                )
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+===== File: ./tests/Examples.py =====
+from src import failureCases
+import random
+from src import Note
+
+f_ = failureCases
+
+
+standardSequence = [0, 2, 1, 0, 3, 2, 4, 3, 2, 1, 0]
+c = 0
+d = 1
+e = 2
+f = 3
+g = 4
+a = 5
+b = 6
+
+
+class Example:
+    def __init__(self,
+                 sequence,
+                 note7=True,
+                 failures=None,
+                 reference=None,
+                 name=None):
+        assert(sequence is not None)
+        self.name = name
+        if note7:
+            self.sequence = []
+            length = len(sequence)
+            for i in range(0, length):
+                self.sequence.append(Note.white_scale(0, sequence[i]))
+        else:
+            self.sequence = sequence
+        self.failures = failures
+        self.reference = reference
+
+    def __str__(self):
+        reference = self.reference if self.reference else ''
+        return 'Example name :{}'.format(self.name) + '\n' + \
+            str(self.sequence) + '\n reference :\n {}'.format(reference)
+
+
+cf_examples = []
+cf_fail_examples = []
+
+cp_examples = []
+cp_fail_examples = []
+
+note7, seq = True, [1, 3, 2, 1, 4, 3, 5, 4, 3, 2, 1]
+standard = Example(sequence=seq, note7=True, failures=None)
+cf_examples.append(standard)
+
+note7, seq = True, [1, 5, 4, 3, 2, 1, 3, 2, 1]
+dorico = Example(sequence=seq, note7=True, failures=None)
+cf_examples.append(dorico)
+
+note7, seq = True, [2, 0, 1, 0, -2, 5, 2, 3, 2]
+frigio = Example(sequence=seq, note7=True, failures=None)
+cf_examples.append(frigio)
+
+note7, seq = True, [2, -2, 5, 4, 3, 2, 0, 3, 2]
+frigio2 = Example(sequence=seq, note7=True, failures=None)
+cf_examples.append(frigio2)
+
+note7, seq = True, [2, -2, -1, 0, 1, 2, 3, 1, 4, 3, 2]
+frigio3 = Example(sequence=seq, note7=True, failures=None)
+cf_examples.append(frigio3)
+
+note7, seq = True, [-3, 1, 0, -2, -1, 0, -1, -2, -3]
+mixo = Example(sequence=seq, note7=True, failures=None)
+cf_examples.append(mixo)
+
+
+'''failure examples '''
+
+note7, seq = True, [c, c]
+failures = [(f_.repeated_note, 1)]
+repeatedNote = Example(sequence=seq, note7=True, failures=failures)
+cf_fail_examples.append(repeatedNote)
+
+note7, seq = True, [f, b, f + 7, b, f, b - 7]
+fail = []
+for i in range(1, 6):
+    fail.append((f_.tritone, i))
+tritone = Example(sequence=seq, note7=True, failures=fail)
+cf_fail_examples.append(tritone)
+
+note7, seq = True, [4, 3, 4, 5, 6, 5]
+failures = [(f_.isolated_tritone, 5)]
+mTritone = Example(sequence=seq, note7=True, failures=failures)
+cf_fail_examples.append(mTritone)
+
+note7, seq = True, [2, 3, 2, 1, 0, -1, 0]
+failures = [(f_.isolated_tritone, 6)]
+mTritone2 = Example(sequence=seq, note7=True, failures=failures)
+cf_fail_examples.append(mTritone2)
+
+note7, seq = True, [0, 2, 1, 0, 3, 2, 4, 3, 2, -1, 0]
+failures = [(f_.bad_ending, 1)]
+badEnding = Example(sequence=seq, note7=True, failures=failures)
+cf_fail_examples.append(badEnding)
+
+note7, seq = False, [2, 7, 4, 9, 11, 12, 11, 12, 9, 4, 2]
+failures = [(f_.seq, 10), (f_.seq, 6)]
+sequences = Example(sequence=seq, note7=False, failures=failures)
+cf_fail_examples.append(sequences)
+
+note7, seq = False, [2, 9, 11, 2, 4, 2]
+failures = [(f_.badJump, 3)]
+sixthM = Example(sequence=seq, note7=False, failures=failures)
+cf_fail_examples.append(sixthM)
+
+note7, seq = False, [2, 4, 11, 2]
+failures = [(f_.badJump, 1)]
+badJump = Example(sequence=seq, note7=False, failures=failures)
+cf_fail_examples.append(badJump)
+
+
+''' example = D0, F0, E0, D0, G0, F0, A0, G0, F0, E0, RE'''
+# reference_cf = random.choice(cf_examples).sequence
+reference_cf = cf_examples[0].sequence
+sequence_cp = reference_cf.copy()
+sequence_cp[0] = sequence_cp[0] + 1
+counterBadStart = Example(sequence=sequence_cp,
+                          note7=False,
+                          failures=[(f_.dissonance, 10), (f_.bad_start, 10)],
+                          reference=(reference_cf),
+                          name='bad start!'
+                          )
+cp_fail_examples.append(counterBadStart)
+
+
+parallel_5 = []
+failures = []
+for i in range(0, len(reference_cf)):
+    parallel_5.append(reference_cf[i] + 7)
+    if i == 10:
+        continue
+    fail_index = len(reference_cf) - 1 - i
+    failures.append((f_.parallel5, fail_index))
+example = Example(sequence=parallel_5,
+                  note7=(False),
+                  failures=failures,
+                  name='P5_FAIL_EXAMPLE')
+
+
+cp_fail_examples.append(example)
+
+dorian_cp = [9, 9, 7, 9, 11, 12, 12, 11, 14, 13, 14]
+dorian_example = Example(sequence=dorian_cp,
+                         note7=False,
+                         name='dorian counter example 0',
+                         reference=(reference_cf)
+                         )
+cp_examples.append(dorian_example)
+
+seq = [9, 9, 7, 9, 11, 12, 12, 11, 14, 13, 14]
+
+example = Example(seq, note7=(False), reference=(reference_cf))
+cp_examples.append(example)
+# ''' exampleCp = A0 , A0, G0, A0, B0, C1, C1, B0, D1, C1#, D1'''
+#
+# ''' quintas paralelas con la referencia '''
+# parallelFifth = []
+# parallelFifth.append(example[0] + 7)
+# parallelFifth.append(example[1] + 7)
+# parallel_5 = NodeFromSequence(parallelFifth, 0)
+
+===== File: ./generate_musician_pdf.py =====
+#!/usr/bin/env python3
+"""
+Generate a musician-friendly PDF guide for Frankenmusic
+Using reportlab for professional PDF generation
+"""
+
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib.colors import HexColor, black, white
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle, Image
+from reportlab.pdfgen import canvas
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+from datetime import datetime
+
+# Define music-friendly colors
+MUSIC_BLUE = HexColor("#1e3a8a")
+STAFF_LINE = HexColor("#d4a574")
+MUSIC_GREEN = HexColor("#059669")
+ACCENT = HexColor("#dc2626")
+LIGHT_BG = HexColor("#f0f4f8")
+
+class MusicianPDFGenerator:
+    def __init__(self, filename):
+        self.filename = filename
+        self.pagesize = letter
+        self.width, self.height = self.pagesize
+        self.styles = getSampleStyleSheet()
+        self.setup_custom_styles()
+        
+    def setup_custom_styles(self):
+        """Create custom styles for musical document"""
+        self.title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=self.styles['Heading1'],
+            fontSize=36,
+            textColor=MUSIC_BLUE,
+            spaceAfter=12,
+            alignment=TA_CENTER,
+            fontName='Helvetica-Bold'
+        )
+        
+        self.subtitle_style = ParagraphStyle(
+            'Subtitle',
+            parent=self.styles['Normal'],
+            fontSize=14,
+            textColor=STAFF_LINE,
+            spaceAfter=20,
+            alignment=TA_CENTER,
+            fontName='Helvetica-Oblique'
+        )
+        
+        self.heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=self.styles['Heading2'],
+            fontSize=18,
+            textColor=MUSIC_GREEN,
+            spaceAfter=10,
+            spaceBefore=12,
+            fontName='Helvetica-Bold',
+            borderPadding=6
+        )
+        
+        self.section_style = ParagraphStyle(
+            'SectionHead',
+            parent=self.styles['Heading3'],
+            fontSize=13,
+            textColor=MUSIC_BLUE,
+            spaceAfter=8,
+            spaceBefore=8,
+            fontName='Helvetica-Bold'
+        )
+        
+        self.body_style = ParagraphStyle(
+            'BodyText',
+            parent=self.styles['BodyText'],
+            fontSize=11,
+            alignment=TA_JUSTIFY,
+            spaceAfter=10,
+            leading=14
+        )
+        
+    def generate(self):
+        """Generate the complete PDF"""
+        doc = SimpleDocTemplate(
+            self.filename,
+            pagesize=self.pagesize,
+            rightMargin=0.75*inch,
+            leftMargin=0.75*inch,
+            topMargin=0.75*inch,
+            bottomMargin=0.75*inch
+        )
+        
+        story = []
+        
+        # Title Page
+        story.extend(self.create_title_page())
+        story.append(PageBreak())
+        
+        # Table of Contents
+        story.extend(self.create_toc())
+        story.append(PageBreak())
+        
+        # Main Content
+        story.extend(self.create_what_is_frankenmusic())
+        story.append(PageBreak())
+        
+        story.extend(self.create_how_it_works())
+        story.append(PageBreak())
+        
+        story.extend(self.create_melodic_rules())
+        story.append(PageBreak())
+        
+        story.extend(self.create_harmonic_rules())
+        story.append(PageBreak())
+        
+        story.extend(self.create_species_guide())
+        story.append(PageBreak())
+        
+        story.extend(self.create_modes_guide())
+        story.append(PageBreak())
+        
+        story.extend(self.create_getting_started())
+        
+        doc.build(story)
+        print(f"✓ PDF generated: {self.filename}")
+        
+    def create_title_page(self):
+        """Create the title page"""
+        content = [
+            Spacer(1, 1.5*inch),
+            Paragraph("🎼 FRANKENMUSIC 🎼", self.title_style),
+            Spacer(1, 0.2*inch),
+            Paragraph("Renaissance Counterpoint Generator", self.subtitle_style),
+            Spacer(1, 0.1*inch),
+            Paragraph("A Musician's Guide", ParagraphStyle(
+                'SmallSubtitle',
+                parent=self.styles['Normal'],
+                fontSize=12,
+                textColor=STAFF_LINE,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Oblique'
+            )),
+            Spacer(1, 2*inch),
+            Paragraph(f"<i>Generated {datetime.now().strftime('%B %d, %Y')}</i>", ParagraphStyle(
+                'Footer',
+                parent=self.styles['Normal'],
+                fontSize=10,
+                textColor=MUSIC_BLUE,
+                alignment=TA_CENTER
+            )),
+        ]
+        return content
+        
+    def create_toc(self):
+        """Create Table of Contents"""
+        content = [
+            Paragraph("📑 Table of Contents", self.heading_style),
+            Spacer(1, 0.2*inch),
+        ]
+        
+        toc_items = [
+            "1. What is Frankenmusic?",
+            "2. How It Works: The Engine",
+            "3. Melodic Rules (Cantus Firmus)",
+            "4. Harmonic Rules (Counterpoint)",
+            "5. Species of Counterpoint",
+            "6. Church Modes",
+            "7. Getting Started"
+        ]
+        
+        for item in toc_items:
+            content.append(Paragraph(f"• {item}", self.body_style))
+            content.append(Spacer(1, 0.1*inch))
+            
+        return content
+        
+    def create_what_is_frankenmusic(self):
+        """Main content: What is Frankenmusic"""
+        content = [
+            Paragraph("1. What is Frankenmusic?", self.heading_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph(
+                "Frankenmusic is an <b>intelligent music composition engine</b> that generates counterpoint following the strict rules of Renaissance polyphony. Think of it as a tireless teacher who knows every rule of counterpoint by Knud Jeppesen and can generate valid voice combinations automatically.",
+                self.body_style
+            ),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>Core Capabilities:</b>", self.section_style),
+            Spacer(1, 0.1*inch),
+            
+            Paragraph(
+                "• Generate <b>Cantus Firmus</b> (CF) — the foundational melody<br/>"
+                "• Create <b>Counterpoint voices</b> (CP) that respect the CF<br/>"
+                "• Support <b>multiple church modes</b> (Dorian, Ionian, Phrygian, etc.)<br/>"
+                "• Enforce ~20 compositional rules simultaneously<br/>"
+                "• Export to <b>MIDI</b> for listening and further editing<br/>"
+                "• Work with <b>multiple species</b> of counterpoint",
+                self.body_style
+            ),
+            Spacer(1, 0.2*inch),
+            
+            Paragraph("<b>Perfect for:</b>", self.section_style),
+            Spacer(1, 0.1*inch),
+            
+            Paragraph(
+                "• Students learning counterpoint rules<br/>"
+                "• Composers sketching polyphonic ideas<br/>"
+                "• Music theorists exploring rule interactions<br/>"
+                "• Musicologists studying Renaissance style<br/>"
+                "• Anyone wanting to understand vocal counterpoint",
+                self.body_style
+            ),
+        ]
+        return content
+        
+    def create_how_it_works(self):
+        """Explain the algorithm"""
+        content = [
+            Paragraph("2. How It Works: The Engine", self.heading_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph(
+                "Frankenmusic uses a <b>tree-search algorithm</b> that builds melodies note-by-note, checking against all rules before adding each new note.",
+                self.body_style
+            ),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>The Search Process:</b>", self.section_style),
+            Spacer(1, 0.1*inch),
+            
+            Paragraph(
+                "<b>1. Start:</b> Choose a note to begin (usually the tonic)<br/>"
+                "<b>2. Expand:</b> Try all valid next notes from your vocal range<br/>"
+                "<b>3. Validate:</b> Check each candidate against 20 rules<br/>"
+                "<b>4. Continue:</b> For valid notes, continue recursively<br/>"
+                "<b>5. Complete:</b> When you reach the final note, end the phrase<br/>"
+                "<b>6. Filter:</b> Apply quality metrics to keep best results",
+                self.body_style
+            ),
+            Spacer(1, 0.2*inch),
+            
+            Paragraph("<b>Quality Filters:</b>", self.section_style),
+            Spacer(1, 0.1*inch),
+            
+            Paragraph(
+                "After generating complete melodies, Frankenmusic ranks results by:<br/>"
+                "• <b>Variety:</b> Number of different pitches used<br/>"
+                "• <b>Shape:</b> Where the highest note appears (climax position)<br/>"
+                "• <b>Smoothness:</b> Limiting large jumps (discontinuity count)<br/>"
+                "• <b>Tonal center:</b> How often the mode note appears",
+                self.body_style
+            ),
+        ]
+        return content
+        
+    def create_melodic_rules(self):
+        """Melodic rules section"""
+        content = [
+            Paragraph("3. Melodic Rules (Cantus Firmus)", self.heading_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph(
+                "These rules apply to the basic melody (Cantus Firmus). Every generated melody follows all of these:",
+                self.body_style
+            ),
+            Spacer(1, 0.2*inch),
+            
+            Paragraph("<b>Range & Boundaries:</b>", self.section_style),
+            Paragraph("• Starts on the <b>tonic (tonal center)</b><br/>"
+                     "• Ends on the <b>tonic</b><br/>"
+                     "• Penultimate note is the <b>2nd scale degree</b><br/>"
+                     "• Stays within the vocal range specified",
+                     self.body_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>Intervals (Jumps) Prohibited:</b>", self.section_style),
+            Paragraph("• <b>Major 7th</b> (11 semitones)<br/>"
+                     "• <b>Minor 7th</b> (10 semitones)<br/>"
+                     "• <b>Tritone</b> (6 semitones)<br/>"
+                     "• <b>Any interval larger than octave</b> (>12 semitones)<br/>"
+                     "• <b>Minor 6th ascending</b> (allowed only descending)",
+                     self.body_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>Tritone (Diabolus in Musica):</b>", self.section_style),
+            Paragraph("• Can't appear between adjacent notes<br/>"
+                     "• Can't appear between the highest/lowest in a phrase<br/>"
+                     "• Can't appear in certain harmonic contexts",
+                     self.body_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>Motion & Direction:</b>", self.section_style),
+            Paragraph("• After a large jump (>2nd), the next note must move in <b>contrary direction</b><br/>"
+                     "• This prevents awkward leaps in the wrong direction",
+                     self.body_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>Note Repetition:</b>", self.section_style),
+            Paragraph("• The same note cannot repeat consecutively<br/>"
+                     "• Never more than 3 identical notes in a row (anywhere)<br/>"
+                     "• No repeated melodic patterns within the phrase",
+                     self.body_style),
+        ]
+        return content
+        
+    def create_harmonic_rules(self):
+        """Harmonic rules section"""
+        content = [
+            Paragraph("4. Harmonic Rules (Counterpoint)", self.heading_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph(
+                "When combining voices, additional harmonic rules ensure musical coherence:",
+                self.body_style
+            ),
+            Spacer(1, 0.2*inch),
+            
+            Paragraph("<b>Parallel Motion (Forbidden):</b>", self.section_style),
+            Paragraph("• <b>Direct 5ths:</b> Two voices can't both move to a perfect 5th interval<br/>"
+                     "• <b>Direct 8ves:</b> Two voices can't both move to a perfect octave<br/>"
+                     "<i>Exception: Allowed in lowest voices when not \"exposed\"</i>",
+                     self.body_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>Consonance Requirements:</b>", self.section_style),
+            Paragraph("• Most intervals between voices must be consonant (thirds, sixths, octaves, unisons)<br/>"
+                     "• Perfect intervals (unison, 4th, 5th, octave) require special care<br/>"
+                     "• Dissonances only allowed in specific contexts (passing tones, suspensions)",
+                     self.body_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>Cadence Requirements:</b>", self.section_style),
+            Paragraph("• At phrase end, the <b>highest voice (soprano)</b> must approach the final note by <b>step</b><br/>"
+                     "• Usually: 2nd scale degree → tonic (rising step)<br/>"
+                     "• This creates the characteristic Renaissance \"authentic cadence\" feel",
+                     self.body_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>Repetition:</b>", self.section_style),
+            Paragraph("• Can't have the same harmonic interval repeated more than 4 steps in a row<br/>"
+                     "• Creates melodic variety in the counterpoint",
+                     self.body_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>Unison Prohibition:</b>", self.section_style),
+            Paragraph("• In 2-voice writing, unison is generally avoided<br/>"
+                     "• Sometimes allowed at start/end for stylistic reasons",
+                     self.body_style),
+        ]
+        return content
+        
+    def create_species_guide(self):
+        """Species of counterpoint guide"""
+        content = [
+            Paragraph("5. Species of Counterpoint", self.heading_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph(
+                "Frankenmusic supports multiple species, each with different rhythmic complexity:",
+                self.body_style
+            ),
+            Spacer(1, 0.2*inch),
+            
+            Paragraph("<b>1st Species (Nota contra Nota)</b> ✓ <i>Fully Implemented</i>", self.section_style),
+            Paragraph(
+                "• <b>Rhythm:</b> Note-for-note with Cantus Firmus<br/>"
+                "• <b>Interval:</b> Every beat is a consonant interval<br/>"
+                "• <b>Character:</b> Pure, clean, pedagogical<br/>"
+                "• Perfect for learning the basics",
+                self.body_style
+            ),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>2nd & 3rd Species</b> ⏳ <i>Partial</i>", self.section_style),
+            Paragraph(
+                "• <b>2nd Species:</b> 2 notes in CP for each CF note<br/>"
+                "• <b>3rd Species:</b> 4 notes in CP for each CF note<br/>"
+                "• <b>Challenge:</b> Passing tones, dissonance resolution<br/>"
+                "• <i>Currently: Structure exists, dissonance rules incomplete</i>",
+                self.body_style
+            ),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>4th Species (Suspensions)</b> ⏳ <i>Not Yet</i>", self.section_style),
+            Paragraph(
+                "• <b>Rhythm:</b> Syncopated (tied notes crossing beats)<br/>"
+                "• <b>Key Feature:</b> Suspensions (7-6, 4-3, 2-1)<br/>"
+                "• <b>Dissonance:</b> Carefully prepared and resolved",
+                self.body_style
+            ),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>5th Species (Florid)</b> ⏳ <i>Not Yet</i>", self.section_style),
+            Paragraph(
+                "• <b>Rhythm:</b> Mixed durations combining all species<br/>"
+                "• <b>Spirit:</b> Free, ornamental, fully composed<br/>"
+                "• Most expressive but most challenging",
+                self.body_style
+            ),
+        ]
+        return content
+        
+    def create_modes_guide(self):
+        """Church modes guide"""
+        modes_data = [
+            ["Mode", "Final", "Character", "Scale"],
+            ["Ionian", "C", "Bright, major", "C D E F G A B C"],
+            ["Dorian", "D", "Minor with raised 6th", "D E F G A B C D"],
+            ["Phrygian", "E", "Minor, exotic", "E F G A B C D E"],
+            ["Lydian", "F", "Major with raised 4th", "F G A B C D E F"],
+            ["Mixolydian", "G", "Major with lowered 7th", "G A B C D E F G"],
+            ["Aeolian", "A", "Natural minor", "A B C D E F G A"],
+            ["Locrian", "B", "Minor with lowered 2nd", "B C D E F G A B"],
+        ]
+        
+        content = [
+            Paragraph("6. Church Modes", self.heading_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph(
+                "Frankenmusic can generate music in any of the 8 church modes (also called ecclesiastical or medieval modes):",
+                self.body_style
+            ),
+            Spacer(1, 0.2*inch),
+            
+            Table(modes_data, colWidths=[1.2*inch, 0.8*inch, 1.8*inch, 1.8*inch]),
+            Spacer(1, 0.2*inch),
+            
+            Spacer(1, 0.15*inch),
+            Paragraph(
+                "<b>Pro Tip:</b> Each mode has a different feel. Dorian and Aeolian sound minor; Ionian, Lydian, and Mixolydian sound major; Phrygian and Locrian sound exotic or unsettling.",
+                self.body_style
+            ),
+        ]
+        
+        # Apply table style
+        if len(content) > 4:  # The table is at index 4
+            table = content[4]
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), MUSIC_BLUE),
+                ('TEXTCOLOR', (0,0), (-1,0), white),
+                ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0,0), (-1,0), 10),
+                ('BOTTOMPADDING', (0,0), (-1,0), 8),
+                ('BACKGROUND', (0,1), (-1,-1), LIGHT_BG),
+                ('GRID', (0,0), (-1,-1), 0.5, black),
+                ('FONTSIZE', (0,1), (-1,-1), 9),
+                ('ROWBACKGROUNDS', (0,1), (-1,-1), [white, LIGHT_BG]),
+            ]))
+            
+        return content
+        
+    def create_getting_started(self):
+        """Getting started section"""
+        content = [
+            Paragraph("7. Getting Started", self.heading_style),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>Installation:</b>", self.section_style),
+            Paragraph(
+                "<font face='Courier'>$ git clone &lt;repo&gt;<br/>"
+                "$ cd Frankenmusic<br/>"
+                "$ python3 tests/test.py  <i># Run tests</i></font>",
+                ParagraphStyle('Code', parent=self.styles['Normal'], fontSize=9, 
+                             fontName='Courier', textColor=MUSIC_BLUE, spaceAfter=10)
+            ),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>Simple Example (Python):</b>", self.section_style),
+            Paragraph(
+                "<font face='Courier' size='8'>"
+                "from treeSearch import Voice<br/>"
+                "from src.Note import ScaleMode<br/><br/>"
+                "v = Voice(mode=ScaleMode.Dorian, length=8)<br/>"
+                "v.search()  <i># Generate melodies</i><br/>"
+                "for seq in v.pool:<br/>"
+                "&nbsp;&nbsp;&nbsp;&nbsp;print(seq)  <i># Print notes</i>"
+                "</font>",
+                ParagraphStyle('Code', parent=self.styles['Normal'], fontSize=8, 
+                             fontName='Courier', textColor=MUSIC_BLUE, spaceAfter=10)
+            ),
+            Spacer(1, 0.15*inch),
+            
+            Paragraph("<b>Output:</b>", self.section_style),
+            Paragraph(
+                "Generated melodies are stored as MIDI files in <b>output/midis/</b> and can be imported into any DAW (Ableton, Logic, Finale, Sibelius).",
+                self.body_style
+            ),
+            Spacer(1, 0.2*inch),
+            
+            Paragraph("<b>Learn More:</b>", self.section_style),
+            Paragraph(
+                "See the docs/ folder (especially <b>backlog_reglas.md</b>) for detailed rule comparisons with Jeppesen's theoretical writings.<br/><br/>"
+                "Jeppesen's <i>\"Counterpoint: A Comprehensive Study\"</i> remains the authoritative reference.",
+                self.body_style
+            ),
+            Spacer(1, 0.3*inch),
+            
+            Paragraph(
+                "<i>Frankenmusic brings Renaissance counterpoint into the digital age.</i>",
+                ParagraphStyle('Tagline', parent=self.styles['Normal'], fontSize=11,
+                             textColor=MUSIC_GREEN, alignment=TA_CENTER,
+                             fontName='Helvetica-Oblique', spaceAfter=10)
+            ),
+        ]
+        return content
+
+
+if __name__ == "__main__":
+    generator = MusicianPDFGenerator("output/Frankenmusic_Musicians_Guide.pdf")
+    generator.generate()
+
+===== File: ./treeSearch.py =====
+from src.node import Node
+from src import Note
+import sys
+from src.tree import SNode
+import logging
+import random
+
+
+searched_cf = []
+
+serialized_cf = []
+js = []
+pruned_cf = []
+maxDepth = 11
+counterP = []
+debug_mode = True
+debug_break_search = True
+
+logger = logging.getLogger('treeSearch')
+logging.basicConfig(filename='example.log', level=logging.DEBUG)
+filehandler_dbg = logging.FileHandler(logger.name + '-debug.log', mode='w')
+
+"""constants"""
+Notes = Note.Notes
+sib = Notes.As
+
+
+class Voice:
+
+    def __init__(self, modo, octave, index=0, _range=1,
+                 length=11, plagal=False, debug=False):
+        self.index = index
+        self.length = length
+        self.is_cantus_firmus = (index == 0)
+        self.modo = modo % 12 + 12 * octave
+        self.floor = self.modo if not plagal else self.modo - 7
+        self.ceiling = self.floor + _range * 12
+        self.plagal = plagal
+        self.pool = []
+
+    def is_cantus(self):
+        return self.index == 0
+
+    def range(self):
+        octaves = (self.ceiling - self.floor) // 12
+        return Note.note_range(self.floor, octaves, **{'add_sib': True,
+                               'whites': True})
+
+    def found(self):
+        return len(self.pool) > 0
+
+    def start(self):
+        if self.is_cantus():
+            return [self.modo]
+        filter = {'3rd': True}
+        return Note.degree(self.modo, 1, self.ceiling - 1, **filter)
+
+    def cadence(self):
+        if self.is_cantus():
+            return [Note.white_scale(self.modo, 1)]
+        if self.index == 1:
+            return [self.modo - 1, self.modo + 12]
+        note = self.modo
+        kwargs = {'ag': note - 2}
+        return Note.degree(note=note, n=7, ceiling=self.ceiling, **kwargs)
+
+    def endings(self):
+        if self.is_cantus():
+            return [self.modo]
+        filter = {'major': True}
+        return Note.degree(self.modo, n=1, ceiling=self.ceiling, **filter)
+
+    def add(self, node):
+        try:
+            self.pool.append(node)
+        except Exception:
+            self.pool = {node}
+
+    def size(self):
+        return len(self.pool)
+
+    def get_notes(self, index=None):
+        assert(self.pool is not None)
+        return self.pool[-1 if index is None else index]
+
+    def __str__(self):
+        index = 'cf' if self.index == 0 else self.index
+        string = 'modo: {}, value {}'.format(Notes(self.modo%12), self.modo)
+        string += '\n\tindex: {}'.format(index)
+        string += '\n\tlength: {}'.format(self.length)
+        string += '\n\tplagal: {}'.format(self.plagal)
+        return string
+
+
+class TreeSearch:
+
+    def __init__(self, modo=Notes.D, length=11, plagal=False,
+                 num_voices=1, debug=False, sequential=False,
+                 tree_search=False):
+        self.modo = modo.value
+        self.length = length
+        self.plagal = plagal
+        self.num_voices = num_voices
+        self.voices = []
+        self.sequential = sequential
+        self.tree_search = tree_search
+        self.debug = debug
+        self.parameters = self.Parameters(self)
+        logger.debug('%s', self)
+        for i in range(num_voices):
+            self.add_voice(i, _range=1, octave=i)
+
+    class Parameters:
+        def __init__(self, instance, **kwargs):
+            kwargs['hiIndex'] = kwargs.get('hiIndex', 1 * instance.length // 2)
+            kwargs['disc'] = kwargs.get('disc', 3)
+            kwargs['modeRep'] = kwargs.get('modeRep', 3)
+            kwargs['variety'] = kwargs.get('variety', 5)
+            logger.debug('init parameters: %s', kwargs)
+            self.high_index = kwargs.get('hiIndex')
+            self.discontinuities = kwargs.get('disc')
+            self.modeRep = kwargs.get('modeRep')
+            self.variety = kwargs.get('variety')
+
+    def to_chord(self, *args, omit=None):
+        '''selects a sequence from each voice's tree, default sequence is last generated, then creates a chord array '''
+        chord = []
+        sequences = []
+        for i in range(len(self.voices)):
+            if omit == i:
+                continue
+            try:
+                selected = args[i]
+            except Exception:
+                selected = None
+            voice = self.voices[i]
+            try:
+                sequences.append(voice.get_notes(index=selected))
+            except Exception:
+                pass
+
+        for j in range(self.length):
+            ch = []
+            for i in range(len(sequences)):
+                ch.append(sequences[i].sequence[j])
+            chord.append(ch)
+        # input()
+        return chord
+
+    def add_voice(self, index, _range, octave):
+        voice = Voice(modo=self.modo,
+                      octave=octave,
+                      index=index,
+                      _range=_range,
+                      length=self.length)
+        logger.debug('adding voice %s', voice)
+        try:
+            self.voices[index] = voice
+        except Exception:
+            self.voices.append(voice)
+
+    def push_node(self, index, node):
+        '''commit node object to selected voice's pool'''
+        self.voices[index].add(node)
+
+    def generate_voices(self):
+        '''recursively generate a treesearch using previously generated voices as reference or cantusFirmus'''
+        for i in range(0, len(self.voices)):
+            firmus = self.voices[0:i]
+            self.search_voice(self.voices[i], cf=firmus)
+
+    def _note_name(self, num):
+        octave = num // 12
+        name = Notes(num % 12).name
+        return f"{name}{octave}"
+
+    def display_voice_found(self, voice_index):
+        '''Muestra un log limpio de las voces encontradas hasta voice_index'''
+        voice = self.voices[voice_index]
+        label = "CF" if voice.is_cantus() else f"CP{voice_index}"
+        count = voice.size()
+        seq = voice.pool[0].sequence if voice.found() else []
+        notes = "  ".join(f"{self._note_name(n):>4}" for n in seq)
+        print(f"  [{label}] {count} secuencia(s) → {notes}")
+
+        if voice_index > 0:
+            cf = self.voices[0]
+            if cf.found():
+                cf_seq = cf.pool[0].sequence
+                cf_notes = "  ".join(f"{self._note_name(n):>4}" for n in cf_seq)
+                cp_seq = seq
+                cp_notes = "  ".join(f"{self._note_name(n):>4}" for n in cp_seq)
+                print(f"  CF  →  {cf_notes}")
+                print(f"  CP  →  {cp_notes}")
+
+    def display_voices(self, tree=False, size=3):
+        '''display '''
+        if not tree:
+            for v in self.voices:
+                if v.found():
+                    print(v.get_notes())
+        else:
+            for v in self.voices:
+                size = min(size, len(v.pool))
+                for i in range(size):
+                    print(v.pool[i])
+
+    def search_voice(self, voice, cf=None):
+        # input()
+        voice_index = voice.index
+        start_ = voice.start()
+        range_ = voice.range()
+        cadence_ = voice.cadence()
+        endings_ = voice.endings()
+        num_voices_ = self.num_voices
+        length_ = self.length
+        sequential_ = self.sequential
+        found_break = not self.tree_search
+        chord = self.to_chord(omit=voice_index)
+
+        logger.debug('sequential: %s', sequential_)
+
+        # print(range_)
+
+        # print(cadence_)
+
+        test_cf = [2,5,3,2,7,5,9,7,5,4,2]
+        test_cf = [2,5,4,2,7,5,9,7,5,4,2]
+        test_cp = [9,9,7,9,11,12,12,11,14,13,14]
+        test_cp = test_cf = None
+
+        def search(note, depth=0, last_node=None):
+            if test_cp and voice_index != 0:
+                note = test_cp[depth]
+            elif test_cf and voice_index == 0:
+                note = test_cf[depth]
+            if depth == 0:
+                node = Node(voice, note, debug=self.debug, ref=chord)
+                last_chord = None
+            else:
+                node = last_node.create_child(note)
+                last_chord = chord[depth - 1] + [last_node.note]
+            new_chord = chord[depth] + [node.note]
+            # print(' \nexploring node {}'.format(node))
+            # print('chord {}'.format(new_chord))
+            if not node.is_valid(num_voices_, new_chord, last_chord):
+                return
+            if depth + 1 == length_:
+                if voice_index == 0:
+                    if not self.prune_node(node):
+                        return
+                else:
+                    if not self.prune_node(node, disc=3, modeRep=2, variety=5, high=length_//3):
+                        return
+                logger.debug('PUSHING NODE')
+                self.push_node(voice_index, node)
+                if found_break:
+                    return True
+                return
+            if depth + 1 == length_ - 2:
+                # print('cadence')
+                inspect_set = cadence_
+            elif depth + 1 == length_ - 1:
+                inspect_set = endings_
+            else:
+                inspect_set = range_
+
+            for n in inspect_set:
+                n_ = random.choice(inspect_set) if not sequential_ else n
+                if n == node.note and voice_index == 0:
+                    continue
+                # if voice_index == 1 and n in chord[depth + 1]:
+                #     continue
+                found = search(note=n_, depth=depth + 1, last_node=node)
+                if found and found_break:
+                    return True
+
+        for i in range(len(start_)):
+            logger.debug('voice %d search start', voice_index)
+            found = search(start_[i])
+            logger.debug('%d node(s) found for voice %d', voice.size(), voice_index)
+            if found:
+                # input()
+                break
+        self.display_voice_found(voice_index)
+
+    def __str__(self):
+        return 'search info \n\t modo {}   \n\t sequential {} \
+            \n\t treeSearch {}'.format(
+            self.modo, self.sequential, self.tree_search)
+
+    def prune_node(self, node, **kwargs):
+
+        disc = kwargs.get('disc')
+        modeRep = kwargs.get('modeRep')
+        variety = kwargs.get('variety')
+        high_index = kwargs.get('high')
+
+        if not high_index:
+            high_index = self.parameters.high_index
+        if not disc:
+            disc = self.parameters.discontinuities
+        if not modeRep:
+            modeRep = self.parameters.modeRep
+        if not variety:
+            variety = self.parameters.variety
+        if kwargs.get('debug'):
+            params = {'disc': disc,
+                      'modeRep': modeRep,
+                      'variety': variety,
+                      'hi': high_index}
+            logger.debug('prune params: %s', params)
+
+        if node.disc > disc:
+            # print('disc > ', disc)
+            # input()
+            return False
+        if node.hiIndex < high_index:
+            # print('hiindex <', high_index)
+            # input()
+            return False
+        if len(dict.fromkeys(node.sequence)) < variety:
+            # print('variety <', variety)
+            # input()
+            return False
+        if node.modeRep < modeRep:
+            # print('mode rep <', modeRep)
+            # input()
+            return False
+        return True
+
+
+
+def main():
+
+    new_search = TreeSearch(modo=Notes.D, length=11, plagal=False,
+                            tree_search=False, num_voices=2, debug=False,
+                            sequential=(False))
+    params = {}
+    new_search.parameters = TreeSearch.Parameters(new_search, **params)
+    new_search.generate_voices()
+
+
+if __name__ == '__main__':
+    main()
+
+===== File: ./src/failureCases.py =====
+'''failure cases'''
+parallel5 = 'p5'
+parallel8 = 'p8'
+direct5 = 'd5'
+direct8 = 'd8'
+repeated_note = 'R'
+tritone = 'ag4'
+middle_tritone = 'mTR'
+isolated_tritone = 'iTR'
+bad_ending = 'bE'
+sixthM = '6M'
+badJump = 'j'
+seq = 'SQ'
+pairs = 'ABAB'
+bad_movement = 'bM'
+bad_start = 'bS'
+dissonance = 'dS'
+bad_chord = 'bc'
+bad_chord_start = 'bcs'
+bad_note = 'bN'
+unison = 'un'
+repetedintervals = 'ri'
+
+{
+    'p5': 'parallelfifth',
+    'p8': 'paralleloctave',
+    'd5': 'directfifth',
+    'd8': 'directoctave',
+    'R': 'noteRepetition',
+    'ag4': 'tritone',
+    'mTR': 'middleTritone',
+    'iTR': 'isolatedTritone',
+    'bE': 'badending',
+    '6M': 'majSixth',
+    'j': 'jump',
+    'SQ': 'sequence',
+    'ABAB': 'pairs',
+    'bM': "badMovement",
+    'bS': 'badStart',
+    'dS': "dissonance",
+    'bc': "badChord",
+    'bcs': "badChordStart",
+    'bN': "badNote",
+    'un': 'unison',
+    'ri': 'repeatedintervals'}
+
+===== File: ./src/tree.py =====
+import json
+from json import JSONEncoder
+
+
+class SNode:
+
+    def __init__(self, value=1, parent=None):
+        self.value = value
+        self.parent = parent
+        self.children = []
+        print(parent)
+        if parent is not None:
+            self.parent.children.append(self)
+
+    def toJson(self):
+        serialized = json.dumps(self, indent=4, cls=TreeEncoder)
+        return serialized
+
+
+# subclass JSONEncoder
+class TreeEncoder(JSONEncoder):
+    def default(self, o):
+        attrs = o.__dict__
+        print(o)
+        if attrs['parent'] is not None:
+            attrs['parent'] = o.parent.value
+        return attrs
+
+
+def serialize_node(node, reverse=False):
+    s = node.sequence.copy()
+    if reverse:
+        s.reverse()
+    length = len(node)
+    s_node = SNode(s[0])
+    for i in range(1, length):
+        s_node = SNode(s[i], s_node)
+
+
+if __name__ == '__main__':
+    a = SNode()
+    b = SNode(parent=a)
+    c = SNode(parent=b)
+    # a_json = json.dumps(a, indent=4, cls=TreeEncoder)
+    print(a.toJson())
+
+===== File: ./src/__init__.py =====
+
+===== File: ./src/node.py =====
+"""
+node.py - Node Validation Engine for Counterpoint Rules
+
+This module implements the Node class and validation logic for Renaissance
+counterpoint. Each Node represents a single note in a melodic sequence and
+contains methods to validate against ~15 musical rules for both cantus firmus
+and contrapuntal voices.
+
+Key components:
+- Node class: Tree node with sequence history and metrics
+- Validation rules: Melodic and harmonic constraints
+- Rule dispatchers: Separate logic for CF vs. CP validation
+- Quality metrics: Discontinuities, repetitions, variety
+"""
+
+import logging
+from .Note import Notes, Diatonic
+from . import Note
+from . import failureCases
+from . import mathutils as mth
+
+logger = logging.getLogger(__name__)
+
+'''haciendo el arbol al reves, index = 1,
+    representa penultima nota'''
+'''debe ser 2ndo grado en el cantusFirmus y sensible para
+contrapunto, sensible = modo - 1, en la escala cromatica y diat'''
+
+f_ = failureCases
+sib = Notes.As.value
+
+
+class Node:
+    """
+    Represents a single note in a melodic sequence with full validation state.
+
+    Each node contains the complete note history, current position, and
+    accumulated metrics. Provides methods for creating child nodes and
+    validating against musical rules.
+
+    Attributes:
+        voice: Parent Voice object
+        note (int): Current note value
+        sequence (list): Complete note history
+        index (int): Current position in sequence
+        parent: Previous node in tree
+        ref: Reference sequence for contrapuntal validation
+        Metrics: high, hiIndex, disc (discontinuities), modeRep, pivot
+    """
+
+    def __init__(self, voice, note=None, is_root=True, debug=False, ref=None):
+        self.voice = voice
+        self.note = note
+        self.debug = debug
+        if is_root:
+            self.ref = ref
+            self.root_node = self
+            self.index = 0
+            self.sequence = [self.note]
+            self.pivot = 0
+            self.parent = None
+            self.high = self.note
+            self.disc = 0
+            self.hiIndex = 0
+            self.modeRep = 1
+            if self.debug:
+                self.failures = ['']
+
+    def length(self):
+        return self.voice.length
+
+    def modo(self):
+        return self.voice.modo
+
+    def ceiling(self):
+        return self.voice.ceiling
+
+    def voice_index(self):
+        return self.voice.index
+
+    def is_cantus_firmus(self):
+        return self.voice.is_cantus()
+
+    def create_child(self, note):
+        child = Node(voice=self.voice, is_root=False)
+        child.ref = self.ref
+        child.note = note
+        child.index = self.index + 1
+        child.sequence = self.sequence.copy()
+        child.sequence.append(note)
+        child.pivot = self.pivot
+        child.debug = self.debug
+        child.parent = self.note
+        if note == self.sequence[0]:
+            child.modeRep = self.modeRep + 1
+        else:
+            child.modeRep = self.modeRep
+        if note > self.high:
+            child.hiIndex = self.index + 1
+            child.high = note
+        else:
+            child.hiIndex = self.hiIndex
+            child.high = self.high
+        if abs(note - self.note) > 2:
+            child.disc = self.disc + 1
+        else:
+            child.disc = self.disc
+        if child.debug:
+            child.failures = self.failures.copy()
+        return child
+
+    def equals(self, note):
+        return Note.equals(self.note, note)
+
+    def is_valid(self, num_voices, chord, lastChord=None):
+        cantus_firmus = self.voice.index == 0
+        if cantus_firmus:
+            return self.valid_cf()
+        # input()
+        return self.valid_cf() and self.valid_cp(chord, lastChord)
+
+    def sensible(self):
+        if self.equals(Notes.B) or self.equals(Notes.E):
+            return self.note + 1
+        return self.note - 1
+
+    def jump(self):
+        if self.index == 0:
+            return 'NaN'
+        return self.note - self.parent
+
+    def check_chord(self, chord, num_voices):
+        '''check if notes in chord are in harmonic relation'''
+        logger.debug('check_chord: chord=%s ref=%s', chord, self.ref)
+        if not Note.valid_chord(chord):
+            logger.debug('invalid chord')
+            return False
+        logger.debug('valid chord')
+        root = self.voice.modo
+        ceiling = self.voice.ceiling
+
+        if self.index == 0:
+            filter = {'major': True}
+            chord_ = Note.chord(root, ceiling, **filter)
+            return Note.in_chord(self.note, chord_)
+
+        elif self.index == self.length() - 1:
+            filter = {'3rd': True}
+            chord_ = Note.chord(root, ceiling, **filter)
+            return Note.in_chord(self.note, chord_)
+
+        elif self.index == self.length() - 2:
+            kwargs = {'ag': root + 10}
+            chord_ = Note.degree(root, 7, ceiling, **kwargs)
+            logger.debug('degree 7 chord: %s', chord_)
+            if not Note.in_chord(self.note, chord_):
+                return False
+            top_voice = (self.voice.index == num_voices - 1)
+            if top_voice:
+                sensible = root - 1
+                return Note.in_chord(sensible, chord)
+            return True
+        return True
+
+    def check_direct5(self, voice1, voice2):
+        index = self.index
+        if index == 0:
+            return True
+        move1 = voice1[index] - voice1[index - 1]
+        move2 = voice2[index] - voice2[index - 1]
+        direct = mth.sign(move1) == mth.sign(move2)
+        interval = Note.interval(voice1[index - 1], voice2[index - 1])
+
+        if interval == 7 and direct:
+            return False
+        return True
+
+    def check_direct8(self, voice1, voice2):
+        index = self.index
+        if index == 0:
+            return True
+        move1 = voice1[index] - voice1[index - 1]
+        move2 = voice2[index] - voice2[index - 1]
+        direct = mth.sign(move1) == mth.sign(move2)
+        interval = Note.interval(voice1[index - 1], voice2[index - 1])
+
+        if interval == 12 or interval == 0:
+            if direct:
+                return False
+        return True
+
+    def checkTritoneInside(self):
+        return self.index < 2 or \
+            abs(self.note - self.sequence[self.index - 2]) != 6
+
+    def check_jump_end(self):
+        if self.index == self.length() - 2 and self.jump() >= 7:
+            return False
+        return True
+
+    def check_jump(self):
+        ''' checa si el salto es valido, i.e intervalo permitido'''
+        if self.index == 0:
+            return True
+        jump = abs(self.jump())
+        if jump == 11:
+            return False
+        if jump > 12:
+            return False
+        if jump == 10:
+            return False
+        if jump == 9:
+            return False
+        if jump == 6:
+            return False
+        if jump == 8:
+            if self.note < self.parent and self.is_cantus_firmus():
+                return False
+        return True
+
+    def checkTritoneIsolated(self):
+        index = self.index
+        if index < 2:
+            return True
+        lastJump = self.sequence[index - 1] - self.sequence[index - 2]
+        jump = self.note - self.parent
+        if mth.sign(jump) != mth.sign(lastJump):
+            lastPivot = self.pivot
+            self.pivot = self.index - 1
+            if lastPivot is not None:
+                if (self.sequence[lastPivot] - self.parent) % 12 == 6:
+                    self.pivot = index - 1
+                    return False
+        return True
+
+    def check_repetition(self):
+        if self.index == 0:
+            return True
+        note = self.note
+        counterMode = self.voice.index != 0
+        if note == self.parent:
+            if not counterMode:
+                return False
+            elif self.index >= 2 and self.sequence[self.index - 2] == note:
+                return False
+        if self.index >= 2:
+            index = self.index
+            notes = self.sequence[index - 2:]
+            notes_ = [note % 12 for note in notes]
+            if notes_[0] == notes_[1] and notes_[0] == notes_[2]:
+                return False
+        return True
+
+    def check_movement(self):
+        if self.index < 2:
+            return True
+        jump = self.jump()
+        lastJump = self.sequence[self.index - 1] - self.sequence[self.index - 2]
+        is_ending = self.index == self.length() - 1
+        if lastJump < -2 and jump < 0:
+            return is_ending and abs(lastJump) <= 5
+        if lastJump > 2 and jump > 0:
+            return False
+        return True
+
+    def check_note(self):
+        if self.debug:
+            pass
+        index = self.index
+        voice_index = self.voice.index
+        note = self.note
+        if voice_index == 0 and Note.equals(note, sib):
+            return False
+        if index == 0:
+            if voice_index == 0:
+                if note != self.modo():
+                    return False
+        else:
+            lastnote = self.parent
+            if Note.equals(note, sib + 1) and Note.equals(lastnote, sib):
+                return False
+            if Note.equals(note, sib) and Note.equals(lastnote, sib + 1):
+                return False
+            if index == self.length() - 1 and not Note.equals(
+                                                            note,
+                                                            self.modo()):
+                return False
+            if voice_index == 0:
+                sup = Note.white_scale(self.modo(), 1)
+                if index == self.length() - 3 and Note.equals(note, self.modo()):
+                    # In modes with a semitone approach (e.g. Phrygian E→F→E),
+                    # the root at length-3 is a valid cadential departure.
+                    if Note.interval(self.modo(), sup) != 1:
+                        return False
+                if index == self.length() - 2 and not Note.equals(note, sup):
+                    return False
+                if index == self.length() - 1 and not Note.equals(
+                                                                note,
+                                                                self.modo()):
+                    return False
+        return True
+
+    def check_sequences(self):
+        i = self.index
+        note = self.note
+        parent = self.parent
+        s = self.sequence
+        if i < 3:
+            return True
+        jump = Note.interval(parent, note)
+        interval02 = Diatonic.interval(s[i - 2], s[i - 0])
+        interval13 = Diatonic.interval(s[i - 3], s[i - 1])
+        logger.debug('check_sequences: seq=%s interval02=%s interval13=%s',
+                     s, interval02, interval13)
+
+        if interval02 == interval13 and (abs(jump) > 2 or interval02 == 0):
+            return False
+        if i < 4:
+            return True
+        if s[i] == s[i-2] and s[i - 2] == s[i - 4]:
+            return False
+        interval14 = Note.interval(s[i - 1], s[i - 4])
+        if i >= 5:
+            interval03 = Diatonic.interval(s[i - 3], s[i - 0])
+            interval25 = Diatonic.interval(s[i - 5], s[i - 2])
+            interval14 = Diatonic.interval(s[i - 4], s[i - 1])
+            window_has_leap = any(Note.interval(s[k], s[k + 1]) > 3
+                                  for k in range(i - 5, i))
+            if window_has_leap and interval25 == interval14:
+                if interval14 == interval03:
+                    return False
+            s, s_ = s[i - 5: i - 2], s[i - 2:]
+            s_.reverse()
+            s = s + s_
+            i = 5
+            interval03 = Diatonic.interval(s[0], s[3])
+            interval14 = Diatonic.interval(s[1], s[4])
+            interval25 = Diatonic.interval(s[2], s[5])
+            if window_has_leap and interval25 == interval14:
+                if interval14 == interval03:
+                    return False
+        i = self.index
+        if i >= 6:
+            s = self.sequence
+            interval04 = Diatonic.interval(s[i - 4], s[i - 0])
+            interval15 = Diatonic.interval(s[i - 5], s[i - 1])
+            interval26 = Diatonic.interval(s[i - 6], s[i - 2])
+            window_has_leap = any(Note.interval(s[k], s[k + 1]) > 3
+                                  for k in range(i - 6, i))
+            if window_has_leap and interval04 == interval15:
+                if interval15 == interval26:
+                    return False
+        return True
+
+    def cp_valid_generator(self, cf_, cf_last, chord, cf_index=1,
+                           twovoices=False):
+        # print()
+        try:
+            cp = [self.parent, self.note]
+            cp_move = cp[1] - cp[0]
+            cf = [cf_last, cf_]
+            cf_move = cf[1] - cf[0]
+            interval = abs(cp[1] - cf[1]) % 12
+            # input()
+            if twovoices:
+                if self.ref[self.index] == self.note:
+                    yield (f_.unison, False)
+                else:
+                    yield ('checkunison', True)
+
+            if interval == 0 and mth.sign(cf_move) == mth.sign(cp_move):
+                yield ('checkdirect8', False)
+            else:
+                yield ('checkdirect8', True)
+
+            if interval == 7 and mth.sign(cf_move) == mth.sign(cp_move):
+                yield ('checkdirect5', False)
+            else:
+                yield ('checkdirect5', True)
+
+            if not Note.consonance(self.note, cf_):
+                yield (f_.dissonance, False)
+            else:
+                yield (f_.dissonance, True)
+
+            if not self.check_chord(chord, 2):
+                yield ('checkchord', False)
+            else:
+                yield ('checkchord', True)
+
+            if self.index >= 4:
+                reference = self.ref[self.index - 4:]
+                sequence = self.sequence
+                index = self.index
+                intervals = []
+                for i in range(4):
+                    intervals.append(Note.Diatonic.interval(
+                                     reference[i][cf_index],
+                                     sequence[index - 4 + i]))
+                if len(set(intervals)) == 1:
+                    yield ('checkrepintervals', False)
+                else:
+                    yield ('checkrepintervals', True)
+        except Exception as e:
+            assert(self.index == 0)
+            yield (e, True)
+
+    def cf_valid_generator(self):
+
+        yield (self.check_note, False) if not self.check_note() else \
+            (self.check_note, True)
+
+        yield (self.check_repetition, False) if not self.check_repetition() else \
+            (self.check_repetition, True)
+
+        yield (self.checkTritoneInside, False) if not self.checkTritoneInside() else \
+            (self.checkTritoneInside, True)
+
+        yield (self.check_jump, False) if not self.check_jump() \
+            else (self.check_jump, True)
+
+        yield (self.check_movement, False) if not self.check_movement() else \
+            (self.check_movement, True)
+
+        yield (self.checkTritoneIsolated, False) if not self.checkTritoneIsolated() else \
+            (self.checkTritoneIsolated, True)
+        yield (self.check_sequences, False) if not self.check_sequences() \
+            else (self.check_sequences, True)
+
+    def valid_cp(self, chord, lastChord):
+
+        voice_index = self.voice.index
+        size = len(chord)
+        for i in range(0, size):
+            if i == voice_index:
+                continue
+            cf = chord[i]
+            cf_last = lastChord[i] if self.index > 0 else None
+            if self.voice.index == 1:
+                logger.debug('reference=%s sequence=%s chord=%s lastchord=%s',
+                             self.ref, self.sequence, chord, lastChord)
+            generator = self.cp_valid_generator(cf, cf_last, chord, cf_index=i)
+            if not self.yield_validate(*generator):
+                logger.debug('invalid node cp at %d', self.index)
+                return False
+            else:
+                logger.debug('valid node-cp at %d', self.index)
+        return True
+
+    def valid_cf(self):
+        if self.voice.index > 0:
+            logger.debug('generating cp validation from: %s', self.sequence)
+        generator = self.cf_valid_generator()
+        if self.yield_validate(*generator):
+            logger.debug('valid sequence %s, voice_index: %d',
+                         self.sequence, self.voice.index)
+            return True
+        else:
+            logger.debug('invalid node cf at %s', self.sequence)
+            return False
+
+    def yield_validate(self, *generator):
+        valid = True
+        for value in generator:
+            assert(value is not None)
+            operation = value[0]
+            failure = value[1]
+            valid &= failure
+            if self.debug:
+                self.debug_log(operation=operation,
+                               result=failure)
+            elif not valid:
+                return False
+        return valid
+
+    def debug_log(self, operation, result=None):
+        self.log_function(operation, result=result)
+        index = self.index
+        failures = self.failures
+        message = str(operation) + '[{}]'.format(self.index)
+        self.fail = True
+        if not result:
+            try:
+                log = failures[index]
+                failures[index] = log + message
+            except Exception:
+                failures.append(message)
+        else:
+            logger.debug('pass %s', operation)
+        # input()
+
+    def log_function(self, method_name, **kwargs):
+        result = kwargs.get('result')
+        logger.debug('log function: %s, result: %s', method_name, result)
+
+    def __str__(self):
+        numerical = self.sequence
+        notes = []
+        for note in numerical:
+            if note:
+                notes.append(str(Notes(note % 12)) + str(note//12))
+            else:
+                notes.append('none')
+        error_log = str(self.failures) if self.debug else ''
+        return str(numerical) + '\nnotes :\n  ' + str(notes) + '\nfailures :\n ' + error_log
+
+===== File: ./src/Note.py =====
+import logging
+from enum import Enum
+
+logger = logging.getLogger(__name__)
+
+
+class Notes(Enum):
+    C = 0
+    Cs = 1
+    D = 2
+    Ds = 3
+    E = 4
+    F = 5
+    Fs = 6
+    G = 7
+    Gs = 8
+    A = 9
+    As = 10
+    B = 11
+
+
+def equals(note1, note2):
+    return (note1 - note2) % 12 == 0
+
+
+def is_white(note):
+    note = note % 12
+    if note <= 4:
+        if note % 2 == 0:
+            return True
+        return False
+    else:
+        if note % 2 == 0:
+            return False
+        return True
+
+
+def print_sequence(s):
+    if s is None:
+        return
+    s_ = []
+    for i in range(len(s)):
+        if s[i] is None:
+            continue
+        st = '('
+        for j in range(len(s[i])):
+            note = Notes(s[i][j] % 12).name + str(s[i][j]//12)
+            st += ', {}'.format(note)
+        st = st + ')'
+        s_.append(st)
+    print(s_)
+
+
+
+def ninterval(note1, note2):
+    return abs(note1 - note2)
+
+
+def succesor(note):
+    """ succesor regresa la siguiente nota mayor o igual que note"""
+    if is_white(note + 1):
+        return note + 1
+    return note + 2
+
+
+def antecesor(note):
+    if is_white(note - 1):
+        return note - 1
+    return note - 2
+
+
+def white_scale(root, step):
+    if step == 0:
+        return root
+    if step > 0:
+        return succesor(white_scale(root, step - 1))
+    return antecesor(white_scale(root, step + 1))
+
+
+def str_interval(fr, to):
+    s = str(abs(to - fr)+1)
+    s_ = (to - fr) % 12
+    if abs(to - fr)+1 < 10:
+        s = ' ' + s
+    if s_ < 5:
+        if s_ == 0:
+            return s + 'A'
+        if s_ % 2 == 0:
+            s = s + 'M'
+        else:
+            s = s + 'm'
+    else:
+        if s_ == 5 or s_ == 7 or s_ == 0:
+            return s + 'A'
+        if s_ == 6:
+            return s + 'Ag'
+        if s_ < 12:
+            if s_ % 2 == 0:
+                s = s + 'm'
+            else:
+                s = s + 'M'
+    return s
+
+
+def interval(note1, note2, modulo12=True):
+    diff = abs(note1 - note2)
+    return diff % 12 if modulo12 else diff
+
+
+def interval_table(s1, s2, reverse):
+    s = []
+    if reverse:
+        s1 = s1.copy()
+        s2 = s2.copy()
+        s1.reverse()
+        s2.reverse()
+    for i in range(0, len(s1)):
+        s.append(interval(s1[i], s2[i]))
+    return s
+
+
+def consonance(note1, note2, imperfect=False):
+    inter = interval(note1, note2)
+
+    if inter == 0:
+        return True
+    if inter == 7:
+        return True
+    if inter == 3:
+        return True
+    if inter == 4:
+        return True
+    if inter == 8:
+        return True
+    if inter == 9:
+        return True
+    if inter == 5 and imperfect:
+        return True
+    return False
+
+
+def valid_chord(chord):
+    logger.debug('chord received %s', chord)
+    chord = sorted(chord)
+    root = chord[0]
+    chord = map(lambda x: (x - root) % 12, chord)
+    chord = list(dict.fromkeys(chord))
+    intervals = []
+    for i in range(1, len(chord)):
+        intervals.append(chord[i] - chord[i - 1])
+    """ unison """
+    if len(intervals) == 0:
+        return True
+    first = intervals[0]
+    ln = len(intervals)
+    logger.debug('checking chord %s, intervals %s', chord, intervals)
+    if ln == 1:
+        if first == 3 or first == 4 or first == 7 or first == 8 or first == 9:
+            return True
+        return False
+    if ln == 2:
+        if first == 3:
+            if intervals[1] == 4 or intervals[1] == 5 or intervals[1] == 6:
+                return True
+        if first == 4:
+            if intervals[1] == 3 or intervals[1] == 5:
+                return True
+        return False
+    return False
+
+
+def dissonance(note1, note2):
+    return not consonance(note1, note2)
+
+
+def unison(note1, note2):
+    return note1 == note2
+
+
+def clamp(note, ceiling):
+    while(note > ceiling):
+        note -= 12
+    return note
+
+
+def print_chord(chord):
+    if chord is None:
+        return
+    ar = []
+    for note in chord:
+        ar.append(Notes(note % 12).name + str(note//12))
+    print(ar)
+
+
+def chord(note, ceiling, **filter):
+    major = filter.get('major')
+    accend = filter.get('ag')
+    filterthird = filter.get('3rd')
+    filterfifth = filter.get('5th')
+    filterroot = filter.get('root')
+    chord = []
+    if not filterroot:
+        chord.append(note)
+        if note + 12 <= ceiling:
+            chord.append(note + 12)
+    if not filterthird:
+        if major:
+            third = note + 4
+        else:
+            third = white_scale(note, 2)
+        if third > ceiling:
+            third -= 12
+        chord.append(third)
+    if not filterfifth:
+        fifth = white_scale(note, 4)
+        if fifth > ceiling:
+            fifth -= 12
+        chord.append(fifth)
+    if accend is not None:
+        for i in range(0, len(chord)):
+            if (chord[i] - accend) % 12 == 0:
+                chord[i] = clamp(chord[i] + 1, ceiling)
+    return chord
+
+
+def fifth(note, ceiling):
+    fifth = white_scale(note, 4)
+    if fifth > ceiling:
+        fifth -= 12
+    return fifth
+
+
+def degree(note, n, ceiling, **filter):
+    nth = white_scale(note, n - 1)
+    if nth > ceiling:
+        nth -= 12
+    return chord(nth, ceiling, **filter)
+
+
+def note_range(root, octaves=1, **filter):
+    rng = []
+    chord = filter.get('chord')
+    filter_consonance = filter.get('consonances') or chord
+    white_notes = filter.get('whites')
+    filter_note = filter.get('!note')
+    sib = filter.get('add_sib')
+    top = root + 12 * octaves
+    for note in range(root, root + 12*octaves + 1):
+        if filter_consonance and not consonance(root, note):
+            continue
+        if chord:
+            if interval(root, note) == 8 or interval(root, note) == 9:
+                continue
+        if white_notes and not is_white(note):
+            continue
+        if filter_note and equals(note, filter_note):
+            continue
+        rng.append(note)
+    if filter.get('major'):
+        rng.remove(white_scale(root, 3))
+        rng.append(root + 4)
+    if sib:
+        for i in range(0, octaves + 1):
+            sib = 10
+            sib = root + ((sib - root) % 12) + 12 * i
+            if sib <= top:
+                rng.append(sib)
+    return rng
+
+
+def in_chord(note, chord):
+    ''' returns true if note matches%12 any note in chord'''
+    for i in range(0, len(chord)):
+        if equals(note, chord[i]):
+            return True
+    return False
+
+
+def chord_matches(chord1, chord2):
+    for note in chord1:
+        if not in_chord(note, chord2):
+            return False
+    return True
+
+
+class Diatonic(Enum):
+    C = 0
+    D = 1
+    E = 2
+    F = 3
+    G = 4
+    A = 5
+    B = 6
+
+    @staticmethod
+    def equals(note1, note2):
+        return (note1 - note2) % 7 == 0
+
+    @staticmethod
+    def index(note12):
+        # if note < 0:
+        #     note = note % 12
+        #     return int((note12 + int(note12/5))/2)
+        oct = note12//12
+        note12 = note12 % 12
+        return (note12 + note12//5) // 2 + 7*oct
+
+    @staticmethod
+    def interval(note1, note2, debug=True):
+        # if debug:
+        #     print('note is ', note1)
+        #     print('note is ', note2)
+        note1 = Diatonic.index(note1)
+        note2 = Diatonic.index(note2)
+        #
+        # if debug:
+        #     print('index1', note1)
+        #     print('index2', note2)
+        #     print('interval is ', note2 - note1)
+
+        return note2 - note1
+
+
+class ScaleMode(Enum):
+    Ionian = 1
+    Dorian = 2
+    Phrygian = 3
+    Lydian = 4
+    Mixolydian = 5
+    Aeolian = 6
+    Locrian = 7
+
+===== File: ./src/mathutils.py =====
+
+def sign(n):
+    '''n/abs(n)'''
+    if n == 0:
+        return 0
+    return n/abs(n)
+
