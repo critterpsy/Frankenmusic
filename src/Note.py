@@ -1,4 +1,7 @@
+import logging
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 
 class Notes(Enum):
@@ -100,7 +103,8 @@ def str_interval(fr, to):
 
 
 def interval(note1, note2, modulo12=True):
-    return abs(note1 - note2) % (12 if modulo12 else 1)
+    diff = abs(note1 - note2)
+    return diff % 12 if modulo12 else diff
 
 
 def interval_table(s1, s2, reverse):
@@ -112,10 +116,11 @@ def interval_table(s1, s2, reverse):
         s2.reverse()
     for i in range(0, len(s1)):
         s.append(interval(s1[i], s2[i]))
+    return s
 
 
 def consonance(note1, note2, imperfect=False):
-    inter = interval_12(note1, note2)
+    inter = interval(note1, note2)
 
     if inter == 0:
         return True
@@ -135,10 +140,10 @@ def consonance(note1, note2, imperfect=False):
 
 
 def valid_chord(chord):
-    print('chord received {}'.format(chord))
-    chord.sort()
-    min = chord[0]
-    chord = map(lambda x: (x - min) % 12, chord)
+    logger.debug('chord received %s', chord)
+    chord = sorted(chord)
+    root = chord[0]
+    chord = map(lambda x: (x - root) % 12, chord)
     chord = list(dict.fromkeys(chord))
     intervals = []
     for i in range(1, len(chord)):
@@ -148,8 +153,7 @@ def valid_chord(chord):
         return True
     first = intervals[0]
     ln = len(intervals)
-    print('checking chord', chord)
-    print(intervals)
+    logger.debug('checking chord %s, intervals %s', chord, intervals)
     if ln == 1:
         if first == 3 or first == 4 or first == 7 or first == 8 or first == 9:
             return True
@@ -236,13 +240,13 @@ def degree(note, n, ceiling, **filter):
 def note_range(root, octaves=1, **filter):
     rng = []
     chord = filter.get('chord')
-    consonance = filter.get('consonances') or chord
+    filter_consonance = filter.get('consonances') or chord
     white_notes = filter.get('whites')
     filter_note = filter.get('!note')
     sib = filter.get('add_sib')
     top = root + 12 * octaves
     for note in range(root, root + 12*octaves + 1):
-        if consonance and not consonance(root, note):
+        if filter_consonance and not consonance(root, note):
             continue
         if chord:
             if interval(root, note) == 8 or interval(root, note) == 9:

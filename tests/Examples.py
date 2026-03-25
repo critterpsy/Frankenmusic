@@ -1,6 +1,6 @@
-import failureCases
+from src import failureCases
 import random
-from Note import Note
+from src import Note
 
 f_ = failureCases
 
@@ -22,13 +22,13 @@ class Example:
                  failures=None,
                  reference=None,
                  name=None):
-        assert(seq is not None)
+        assert(sequence is not None)
         self.name = name
         if note7:
             self.sequence = []
-            length = len(seq)
+            length = len(sequence)
             for i in range(0, length):
-                self.sequence.append(Note.diatonicScale(0, sequence[i]))
+                self.sequence.append(Note.white_scale(0, sequence[i]))
         else:
             self.sequence = sequence
         self.failures = failures
@@ -154,11 +154,10 @@ dorian_example = Example(sequence=dorian_cp,
                          )
 cp_examples.append(dorian_example)
 
-seq = [9, 8, 13, 11, 11, 13, 12, 4, 5, 1, 14]
+seq = [9, 9, 7, 9, 11, 12, 12, 11, 14, 13, 14]
 
 example = Example(seq, note7=(False), reference=(reference_cf))
 cp_examples.append(example)
-# counterBadStart = Node.FromSequence(cf, octaveShift=0, isCantus=False)
 # ''' exampleCp = A0 , A0, G0, A0, B0, C1, C1, B0, D1, C1#, D1'''
 #
 # ''' quintas paralelas con la referencia '''

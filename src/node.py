@@ -1,8 +1,25 @@
-from Note import Notes, Diatonic
-import Note
-import failureCases
-import mathutils as mth
-from termcolor import colored
+"""
+node.py - Node Validation Engine for Counterpoint Rules
+
+This module implements the Node class and validation logic for Renaissance
+counterpoint. Each Node represents a single note in a melodic sequence and
+contains methods to validate against ~15 musical rules for both cantus firmus
+and contrapuntal voices.
+
+Key components:
+- Node class: Tree node with sequence history and metrics
+- Validation rules: Melodic and harmonic constraints
+- Rule dispatchers: Separate logic for CF vs. CP validation
+- Quality metrics: Discontinuities, repetitions, variety
+"""
+
+import logging
+from .Note import Notes, Diatonic
+from . import Note
+from . import failureCases
+from . import mathutils as mth
+
+logger = logging.getLogger(__name__)
 
 '''haciendo el arbol al reves, index = 1,
     representa penultima nota'''
@@ -14,6 +31,23 @@ sib = Notes.As.value
 
 
 class Node:
+    """
+    Represents a single note in a melodic sequence with full validation state.
+
+    Each node contains the complete note history, current position, and
+    accumulated metrics. Provides methods for creating child nodes and
+    validating against musical rules.
+
+    Attributes:
+        voice: Parent Voice object
+        note (int): Current note value
+        sequence (list): Complete note history
+        index (int): Current position in sequence
+        parent: Previous node in tree
+        ref: Reference sequence for contrapuntal validation
+        Metrics: high, hiIndex, disc (discontinuities), modeRep, pivot
+    """
+
     def __init__(self, voice, note=None, is_root=True, debug=False, ref=None):
         self.voice = voice
         self.note = note
@@ -45,7 +79,7 @@ class Node:
         return self.voice.index
 
     def is_cantus_firmus(self):
-        return self.voice.is_cantus_firmus()
+        return self.voice.is_cantus()
 
     def create_child(self, note):
         child = Node(voice=self.voice, is_root=False)
@@ -97,16 +131,11 @@ class Node:
 
     def check_chord(self, chord, num_voices):
         '''check if notes in chord are in harmonic relation'''
-        print('checkchord!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-        Note.print_chord(chord)
-        print(self.ref)
-        # input()
+        logger.debug('check_chord: chord=%s ref=%s', chord, self.ref)
         if not Note.valid_chord(chord):
-            print('invalid chord')
-            # input()
+            logger.debug('invalid chord')
             return False
-        print('valid chord')
-        # input()
+        logger.debug('valid chord')
         root = self.voice.modo
         ceiling = self.voice.ceiling
 
@@ -123,9 +152,7 @@ class Node:
         elif self.index == self.length() - 2:
             kwargs = {'ag': root + 10}
             chord_ = Note.degree(root, 7, ceiling, **kwargs)
-            print('----------------------------------------------')
-            print(chord_)
-            print(Note.print_chord(chord_))
+            logger.debug('degree 7 chord: %s', chord_)
             if not Note.in_chord(self.note, chord_):
                 return False
             top_voice = (self.voice.index == num_voices - 1)
@@ -187,12 +214,8 @@ class Node:
         if jump == 6:
             return False
         if jump == 8:
-            if self.note < self.parent:
+            if self.note < self.parent and self.is_cantus_firmus():
                 return False
-        diat = Note.Diatonic.interval(self.parent, self.note, debug=False)
-        if jump == 4 and abs(diat) == 3:
-            return False
-
         return True
 
     def checkTritoneIsolated(self):
@@ -236,7 +259,7 @@ class Node:
         is_ending = self.index == self.length() - 1
         if lastJump < -2 and jump < 0:
             return is_ending and abs(lastJump) <= 5
-        if jump > 2 and lastJump > 0:
+        if lastJump > 2 and jump > 0:
             return False
         return True
 
@@ -265,7 +288,10 @@ class Node:
             if voice_index == 0:
                 sup = Note.white_scale(self.modo(), 1)
                 if index == self.length() - 3 and Note.equals(note, self.modo()):
-                    return False
+                    # In modes with a semitone approach (e.g. Phrygian E→F→E),
+                    # the root at length-3 is a valid cadential departure.
+                    if Note.interval(self.modo(), sup) != 1:
+                        return False
                 if index == self.length() - 2 and not Note.equals(note, sup):
                     return False
                 if index == self.length() - 1 and not Note.equals(
@@ -282,15 +308,10 @@ class Node:
         if i < 3:
             return True
         jump = Note.interval(parent, note)
-        print(self.sequence)
-        print(s[i - 2])
-        print(s[i])
         interval02 = Diatonic.interval(s[i - 2], s[i - 0])
         interval13 = Diatonic.interval(s[i - 3], s[i - 1])
-
-        print('intreval02', interval02)
-
-        print('interval13', interval13)
+        logger.debug('check_sequences: seq=%s interval02=%s interval13=%s',
+                     s, interval02, interval13)
 
         if interval02 == interval13 and (abs(jump) > 2 or interval02 == 0):
             return False
@@ -303,7 +324,9 @@ class Node:
             interval03 = Diatonic.interval(s[i - 3], s[i - 0])
             interval25 = Diatonic.interval(s[i - 5], s[i - 2])
             interval14 = Diatonic.interval(s[i - 4], s[i - 1])
-            if interval25 == interval14:
+            window_has_leap = any(Note.interval(s[k], s[k + 1]) > 3
+                                  for k in range(i - 5, i))
+            if window_has_leap and interval25 == interval14:
                 if interval14 == interval03:
                     return False
             s, s_ = s[i - 5: i - 2], s[i - 2:]
@@ -313,7 +336,7 @@ class Node:
             interval03 = Diatonic.interval(s[0], s[3])
             interval14 = Diatonic.interval(s[1], s[4])
             interval25 = Diatonic.interval(s[2], s[5])
-            if interval25 == interval14:
+            if window_has_leap and interval25 == interval14:
                 if interval14 == interval03:
                     return False
         i = self.index
@@ -322,7 +345,9 @@ class Node:
             interval04 = Diatonic.interval(s[i - 4], s[i - 0])
             interval15 = Diatonic.interval(s[i - 5], s[i - 1])
             interval26 = Diatonic.interval(s[i - 6], s[i - 2])
-            if interval04 == interval15:
+            window_has_leap = any(Note.interval(s[k], s[k + 1]) > 3
+                                  for k in range(i - 6, i))
+            if window_has_leap and interval04 == interval15:
                 if interval15 == interval26:
                     return False
         return True
@@ -338,7 +363,7 @@ class Node:
             interval = abs(cp[1] - cf[1]) % 12
             # input()
             if twovoices:
-                if self.reference[self.index] == self.note:
+                if self.ref[self.index] == self.note:
                     yield (f_.unison, False)
                 else:
                     yield ('checkunison', True)
@@ -407,31 +432,26 @@ class Node:
             cf = chord[i]
             cf_last = lastChord[i] if self.index > 0 else None
             if self.voice.index == 1:
-                print('reference \n')
-                print(self.ref)
-                print('sequence\n')
-                print(self.sequence)
-                print('chord is {}', chord)
-                print('lastchord is {}', lastChord)
+                logger.debug('reference=%s sequence=%s chord=%s lastchord=%s',
+                             self.ref, self.sequence, chord, lastChord)
             generator = self.cp_valid_generator(cf, cf_last, chord, cf_index=i)
             if not self.yield_validate(*generator):
-                print('invalid node cp at', self.index)
+                logger.debug('invalid node cp at %d', self.index)
                 return False
             else:
-                print('valid node-cp at ', self.index)
+                logger.debug('valid node-cp at %d', self.index)
         return True
 
     def valid_cf(self):
         if self.voice.index > 0:
-            print('generating cp validation from :', self)
-            # input()
+            logger.debug('generating cp validation from: %s', self.sequence)
         generator = self.cf_valid_generator()
         if self.yield_validate(*generator):
-            print('\nvalid sequence {}, voice_index: {}'.format(
-                self.sequence, self.voice.index))
+            logger.debug('valid sequence %s, voice_index: %d',
+                         self.sequence, self.voice.index)
             return True
         else:
-            print('\ninvalid node cf at', self.sequence)
+            logger.debug('invalid node cf at %s', self.sequence)
             return False
 
     def yield_validate(self, *generator):
@@ -448,23 +468,6 @@ class Node:
                 return False
         return valid
 
-    @staticmethod
-    def FromSequence(*sequence, octaveShift=0, reverse=True, is_cantus=False):
-        '''avoid shallow copy of sequence'''
-        if reverse:
-            sequence.reverse()
-        for i in range(0, len(sequence)):
-            valid = True
-            if i == 0:
-                node = Node(sequence[0] + 12*octaveShift, debug=True)
-            else:
-                node = Node(sequence[i], lastNode=node, debug=True)
-            valid = node.validMelody(
-                                     size=len(sequence),
-                                     counter=not is_cantus)
-        # print('node failures {}:'.format(node.failures))
-        return node
-
     def debug_log(self, operation, result=None):
         self.log_function(operation, result=result)
         index = self.index
@@ -477,17 +480,13 @@ class Node:
                 failures[index] = log + message
             except Exception:
                 failures.append(message)
-            if result:
-                print(colored('failure {}'.format(operation), 'red'))
         else:
-            print(colored('pass {}'.format(operation), 'green'))
+            logger.debug('pass %s', operation)
         # input()
 
     def log_function(self, method_name, **kwargs):
-        message = 'log function: {}'.format(method_name)
         result = kwargs.get('result')
-        color = 'green' if result is True else 'red'
-        print(colored('{} , result :{}'.format(message, result), color))
+        logger.debug('log function: %s, result: %s', method_name, result)
 
     def __str__(self):
         numerical = self.sequence
@@ -498,9 +497,4 @@ class Node:
             else:
                 notes.append('none')
         error_log = str(self.failures) if self.debug else ''
-        # print('reference')
-        Note.print_sequence(self.ref)
-        params = {'hi': self.high, 'hiIndex': self.hiIndex, 'discontinuities':
-            self.disc}
-        print(params)
         return str(numerical) + '\nnotes :\n  ' + str(notes) + '\nfailures :\n ' + error_log

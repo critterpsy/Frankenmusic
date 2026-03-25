@@ -1,7 +1,7 @@
-from node import Node
-import Note
+from src.node import Node
+from src import Note
 import sys
-from tree import SNode
+from src.tree import SNode
 import logging
 import random
 
@@ -105,18 +105,18 @@ class TreeSearch:
         self.sequential = sequential
         self.tree_search = tree_search
         self.debug = debug
-        print(self)
+        self.parameters = self.Parameters(self)
+        logger.debug('%s', self)
         for i in range(num_voices):
             self.add_voice(i, _range=1, octave=i)
 
     class Parameters:
         def __init__(self, instance, **kwargs):
-            print('init paramters')
             kwargs['hiIndex'] = kwargs.get('hiIndex', 1 * instance.length // 2)
             kwargs['disc'] = kwargs.get('disc', 3)
             kwargs['modeRep'] = kwargs.get('modeRep', 3)
             kwargs['variety'] = kwargs.get('variety', 5)
-            print(kwargs)
+            logger.debug('init parameters: %s', kwargs)
             self.high_index = kwargs.get('hiIndex')
             self.discontinuities = kwargs.get('disc')
             self.modeRep = kwargs.get('modeRep')
@@ -153,7 +153,7 @@ class TreeSearch:
                       index=index,
                       _range=_range,
                       length=self.length)
-        print('adding voice {}'.format(voice))
+        logger.debug('adding voice %s', voice)
         try:
             self.voices[index] = voice
         except Exception:
@@ -168,11 +168,6 @@ class TreeSearch:
         for i in range(0, len(self.voices)):
             firmus = self.voices[0:i]
             self.search_voice(self.voices[i], cf=firmus)
-
-    # def generate_second_species(self):
-    #     self.search_voice(self.voices[0])
-    #     cf = self.voices.get
-    #     for note in self.voices[]
 
     def display_voices(self, tree=False, size=3):
         '''display '''
@@ -199,7 +194,7 @@ class TreeSearch:
         found_break = not self.tree_search
         chord = self.to_chord(omit=voice_index)
 
-        print(sequential_)
+        logger.debug('sequential: %s', sequential_)
 
         # print(range_)
 
@@ -225,7 +220,6 @@ class TreeSearch:
             # print(' \nexploring node {}'.format(node))
             # print('chord {}'.format(new_chord))
             if not node.is_valid(num_voices_, new_chord, last_chord):
-                print('---------------------------')
                 return
             if depth + 1 == length_:
                 if voice_index == 0:
@@ -234,7 +228,7 @@ class TreeSearch:
                 else:
                     if not self.prune_node(node, disc=3, modeRep=2, variety=5, high=length_//3):
                         return
-                print('PUSHING NODE')
+                logger.debug('PUSHING NODE')
                 self.push_node(voice_index, node)
                 if found_break:
                     return True
@@ -257,10 +251,9 @@ class TreeSearch:
                     return True
 
         for i in range(len(start_)):
-            print('\nvoice {} search start'.format(voice_index))
+            logger.debug('voice %d search start', voice_index)
             found = search(start_[i])
-            print('{} node(s) found for voice {}'.format(voice.size(),
-                                                       voice_index))
+            logger.debug('%d node(s) found for voice %d', voice.size(), voice_index)
             if found:
                 # input()
                 break
@@ -291,8 +284,7 @@ class TreeSearch:
                       'modeRep': modeRep,
                       'variety': variety,
                       'hi': high_index}
-            print(params)
-            input()
+            logger.debug('prune params: %s', params)
 
         if node.disc > disc:
             # print('disc > ', disc)
