@@ -8,6 +8,7 @@ __pycache__/
 dist/
 build/
 .eggs/
+.pytest_cache/
 
 # Virtual environments
 .venv/
@@ -17,12 +18,17 @@ env/
 # IDE
 .idea/
 .vscode/
+.DS_Store
 
 # Logs
 *.log
+treeSearch-debug.log
 
 # Jupyter
 .ipynb_checkpoints/
 
 # Output
 output/
+*.mid
+*.patch
+diff_*.txt

@@ -8,7 +8,6 @@ class SNode:
         self.value = value
         self.parent = parent
         self.children = []
-        print(parent)
         if parent is not None:
             self.parent.children.append(self)
 
@@ -21,20 +20,9 @@ class SNode:
 class TreeEncoder(JSONEncoder):
     def default(self, o):
         attrs = o.__dict__
-        print(o)
         if attrs['parent'] is not None:
             attrs['parent'] = o.parent.value
         return attrs
-
-
-def serialize_node(node, reverse=False):
-    s = node.sequence.copy()
-    if reverse:
-        s.reverse()
-    length = len(node)
-    s_node = SNode(s[0])
-    for i in range(1, length):
-        s_node = SNode(s[i], s_node)
 
 
 if __name__ == '__main__':

@@ -16,8 +16,9 @@ The system generates valid **counterpoint voices (CP)** against an existing *can
 Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian — including plagal variants.
 
 ### Counterpoint Species
-- **1st species** (note against note): fully implemented
-- **2nd–3rd species** (basic structure): implemented without dissonance support
+- **1st species** (note against note): fully implemented in the legacy `TreeSearch` engine
+- **2nd species** (2:1 against a cantus firmus): implemented in `src/species/` with validation, exhaustive search, ranking, weak-beat passing dissonances, and CLI support
+- **3rd species** (4:1): planned
 - **4th species** (suspensions): planned
 - **5th species** (florid): planned
 
@@ -33,11 +34,13 @@ Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian — including pla
 ├── src/                      # Engine core
 │   ├── node.py              # Rule validation (15+ methods)
 │   ├── Note.py              # Music theory utilities
+│   ├── species/             # Dedicated engine for 2nd species
 │   ├── tree.py              # Serialization
 │   └── mathutils.py         # Helpers
 ├── treeSearch.py            # TreeSearch + Voice classes
 ├── tests/                   # Test suite
 │   ├── test.py              # Executable tests
+│   ├── species/             # 2nd-species engine and CLI tests
 │   └── Examples.py          # Valid/invalid sequence examples
 ├── docs/                    # Rule documentation
 │   ├── backlog_reglas.md    # Jeppesen theory vs. implementation comparison
@@ -51,6 +54,35 @@ Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian — including pla
 ```
 
 ## Usage
+
+### CLI
+
+#### Generate 1st-Species Counterpoint
+
+```bash
+python3 generate_counterpoint.py --species 1 --modo C --length 8 --num_voices 2
+```
+
+#### Generate 2nd-Species Counterpoint from an Explicit CF
+
+```bash
+python3 generate_counterpoint.py --species 2 --cf 0,2,4,5 --cp_disposition above
+```
+
+Notes:
+
+- `--cf` expects internal pitch integers separated by commas
+- `--cp_disposition` accepts `above` or `below`
+- `--species 2` currently generates exactly 2 voices: CF + CP
+- `--export_midi` and `--open_score` work for both species routes
+
+#### Generate 2nd-Species Counterpoint from an Auto-Generated CF
+
+```bash
+python3 generate_counterpoint.py --species 2 --modo D --length 6 --cp_disposition below
+```
+
+In this mode, the script generates several candidate cantus firmi with the legacy engine, tries them automatically against the new `src/species/` engine, and keeps the first CF that admits a valid 2nd-species line. If the quick passes fail, it widens the CF search automatically before giving up.
 
 ### Generate a Cantus Firmus
 
@@ -122,7 +154,7 @@ is_valid = cp_node.check_note(next_note)
 
 - ⏳ Parallel fifths/octaves (vs. direct)
 - ⏳ Mandatory consonance on each beat (1st species)
-- ⏳ Prepared and resolved dissonances (2nd–3rd species)
+- ⏳ 3rd-species rhythmic and dissonance handling
 - ⏳ Suspensions (4th species)
 - ⏳ Mixed note values (5th species)
 
@@ -138,14 +170,21 @@ is_valid = cp_node.check_note(next_note)
 python3 tests/test.py
 ```
 
-Expected result: **4 tests pass**. Known edge cases are documented in `CF_KNOWN_BUGS` and `CP_KNOWN_BUGS` within the test file.
+Legacy engine regression suite.
+
+```bash
+python3 -m unittest tests.species.test_second_species_engine tests.species.test_generate_counterpoint_cli
+```
+
+Second-species engine validation, search, ranking, and CLI integration suite.
 
 ## Roadmap
 
 - [ ] Replace debug `print()` statements with structured logging
 - [ ] Fix false positives in `check_sequences()` for modal contexts
 - [ ] Fix Phrygian cadence validation
-- [ ] Implement passing dissonances (2nd–3rd species)
+- [ ] Extend the dedicated species engine to 3rd species
+- [ ] Unify the legacy `TreeSearch` and `src/species/` workflows behind one shared interface
 - [ ] Implement 4th species (suspensions)
 - [ ] Implement 5th species (florid counterpoint)
 
