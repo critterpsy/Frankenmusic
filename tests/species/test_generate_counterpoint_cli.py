@@ -57,6 +57,54 @@ class TestGenerateCounterpointCLI(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("exactamente 2 voces", result.stdout)
 
+    def test_third_species_cli_with_explicit_cf(self):
+        result = self.run_cli(
+            "--species", "3",
+            "--cf", "0,2,0",
+            "--cp_disposition", "above",
+            "--max_solutions", "1",
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("Especie    : 3", result.stdout)
+        self.assertIn("Compás | CF", result.stdout)
+        self.assertIn("CP beat1", result.stdout)
+        self.assertIn("CP beat2", result.stdout)
+        self.assertIn("CP beat3", result.stdout)
+        self.assertIn("CP beat4", result.stdout)
+        self.assertIn("Soluciones válidas   : 1", result.stdout)
+
+    def test_third_species_rejects_num_voices_other_than_two(self):
+        result = self.run_cli(
+            "--species", "3",
+            "--cf", "0,2,4",
+            "--num_voices", "3",
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("exactamente 2 voces", result.stdout)
+
+    def test_list_cfs_flag_prints_canonical_presets(self):
+        result = self.run_cli("--list_cfs")
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("CFs canónicos", result.stdout)
+        self.assertIn("[1]", result.stdout)
+        self.assertIn("d_f_re_e_g_f_a_g_f_e_d", result.stdout)
+
+    def test_second_species_cli_with_canonical_cf_index(self):
+        result = self.run_cli(
+            "--species", "2",
+            "--cf_index", "1",
+            "--cp_disposition", "above",
+            "--max_solutions", "1",
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("Especie    : 2", result.stdout)
+        self.assertIn("Longitud   : 11", result.stdout)
+        self.assertIn("Compás | CF", result.stdout)
+
 
 class TestSecondSpeciesAutoCFSelection(unittest.TestCase):
     def _ranked(self, score=None):
@@ -84,9 +132,35 @@ class TestSecondSpeciesAutoCFSelection(unittest.TestCase):
             valid_candidates=len(solutions),
         )
 
+    def _ranked_with_scores(self, *scores):
+        solutions = []
+        for offset, score in enumerate(scores):
+            solutions.append(
+                RankedSolution(
+                    cp=SecondSpeciesLine(
+                        measures=[
+                            SecondSpeciesMeasure(beat1=7 + offset, beat2=9 + offset),
+                            SecondSpeciesMeasure(beat1=5 + offset, beat2=5 + offset),
+                        ]
+                    ),
+                    score=ScoreBreakdown(
+                        total_score=score,
+                        contributions={},
+                        weights={},
+                    ),
+                    validation=ValidationReport(valid=True, errors=[]),
+                )
+            )
+        return RankedSolutions(
+            solutions=solutions,
+            explored_candidates=10,
+            valid_candidates=len(solutions),
+        )
+
     def test_search_second_species_from_cli_returns_first_solvable_generated_cf(self):
         args = SimpleNamespace(
             cf="",
+            cf_index=0,
             cp_disposition="above",
             max_solutions=3,
             exhaustive_search=False,
@@ -111,6 +185,8 @@ class TestSecondSpeciesAutoCFSelection(unittest.TestCase):
     def test_collect_cf_candidates_retries_multiple_legacy_runs(self):
         args = SimpleNamespace(
             cf="",
+            cf_name="",
+            cf_index=0,
             length=4,
             plagal=False,
             debug=False,
@@ -137,6 +213,106 @@ class TestSecondSpeciesAutoCFSelection(unittest.TestCase):
                     candidates = cli.collect_cf_candidates(args, cli.Notes.C)
 
         self.assertEqual(candidates, [[0, 7, 2, 0], [0, 5, 2, 0]])
+
+    def test_collect_cf_candidates_with_canonical_name(self):
+        args = SimpleNamespace(
+            cf="",
+            cf_name="d_f_re_e_g_f_a_g_f_e_d",
+            cf_index=0,
+            length=4,
+            plagal=False,
+            debug=False,
+            sequential=False,
+            exhaustive_search=False,
+            species=2,
+        )
+
+        candidates = cli.collect_cf_candidates(args, cli.Notes.C)
+
+        self.assertEqual(candidates, [[2, 5, 2, 4, 7, 5, 9, 7, 5, 4, 2]])
+
+    def test_collect_cf_candidates_with_canonical_index(self):
+        args = SimpleNamespace(
+            cf="",
+            cf_name="",
+            cf_index=1,
+            length=4,
+            plagal=False,
+            debug=False,
+            sequential=False,
+            exhaustive_search=False,
+            species=2,
+        )
+
+        candidates = cli.collect_cf_candidates(args, cli.Notes.C)
+
+        self.assertEqual(candidates, [[2, 5, 2, 4, 7, 5, 9, 7, 5, 4, 2]])
+
+    def test_parse_cf_sequence_accepts_note_names(self):
+        parsed = cli.parse_cf_sequence("D, F, R, E, G, F, A, G, F, E, D")
+        self.assertEqual(parsed, [2, 5, 2, 4, 7, 5, 9, 7, 5, 4, 2])
+
+    def test_build_second_species_config_keeps_enough_solutions_for_random_top_k(self):
+        args = SimpleNamespace(
+            cp_disposition="above",
+            exhaustive_species=False,
+            max_solutions=1,
+            random_top_k=4,
+        )
+
+        config = cli.build_second_species_config(args)
+
+        self.assertEqual(config.max_solutions, 4)
+
+    def test_choose_ranked_solution_selects_within_requested_top_k(self):
+        ranked = self._ranked_with_scores(91.0, 88.0, 77.0)
+
+        class FakeRandom:
+            def randrange(self, stop):
+                self.stop = stop
+                return 1
+
+        with patch.object(cli.random, "Random", return_value=FakeRandom()):
+            selected, selected_rank, selected_top_k = cli.choose_ranked_solution(
+                ranked,
+                top_k=2,
+                seed=123,
+            )
+
+        self.assertEqual(selected_rank, 2)
+        self.assertEqual(selected_top_k, 2)
+        self.assertEqual(selected.score.total_score, 88.0)
+
+    def test_run_second_species_exports_selected_random_solution(self):
+        ranked = self._ranked_with_scores(91.0, 88.0, 77.0)
+        args = SimpleNamespace(
+            num_voices=2,
+            random_top_k=2,
+            random_seed=99,
+            export_midi=True,
+            open_score=False,
+            midi_filename="/tmp/test_random_top_k.mid",
+            species=2,
+            modo="C",
+            plagal=False,
+            debug=False,
+            cp_disposition="above",
+        )
+
+        class FakeRandom:
+            def randrange(self, stop):
+                return 1
+
+        with patch.object(cli, "search_second_species_from_cli", return_value=([0, 2], ranked, 1, 1)):
+            with patch.object(cli.random, "Random", return_value=FakeRandom()):
+                with patch.object(cli, "print_header"):
+                    with patch.object(cli, "print_second_species_results"):
+                        with patch.object(cli.os, "makedirs"):
+                            with patch.object(cli, "export_second_species_to_midi") as export_midi:
+                                cli.run_second_species(args, cli.Notes.C)
+
+        exported_cp = export_midi.call_args.args[1]
+        self.assertEqual(exported_cp, ranked.solutions[1].cp)
 
 
 class TestMuseScoreLaunch(unittest.TestCase):

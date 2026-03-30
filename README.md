@@ -18,7 +18,7 @@ Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian — including pla
 ### Counterpoint Species
 - **1st species** (note against note): fully implemented in the legacy `TreeSearch` engine
 - **2nd species** (2:1 against a cantus firmus): implemented in `src/species/` with validation, exhaustive search, ranking, weak-beat passing dissonances, and CLI support
-- **3rd species** (4:1): planned
+- **3rd species** (4:1): implemented in `src/species/` API (`validate/search/rank`) with Jeppesen-oriented weak-beat figures (`passing`, `lower neighbor`, `cambiata`) and documented `v1` restrictions
 - **4th species** (suspensions): planned
 - **5th species** (florid): planned
 
@@ -44,6 +44,7 @@ Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian — including pla
 │   └── Examples.py          # Valid/invalid sequence examples
 ├── docs/                    # Rule documentation
 │   ├── backlog_reglas.md    # Jeppesen theory vs. implementation comparison
+│   ├── cfs_canonicos.md     # Presets de cantus firmus reutilizables desde CLI
 │   ├── jeppesen_contrapunto_reglas.md
 │   └── jeppesen_contrapunto_especieN.md
 ├── notebooks/               # Interactive examples
@@ -71,15 +72,40 @@ python3 generate_counterpoint.py --species 2 --cf 0,2,4,5 --cp_disposition above
 
 Notes:
 
-- `--cf` expects internal pitch integers separated by commas
+- `--cf` accepts internal pitch integers or note tokens separated by commas
+- note tokens supported in `--cf`: `C,D,E,F,G,A,B` and `DO,RE,MI,FA,SOL,LA,SI` (also `R` as alias of `RE`)
+- `--cf_name` loads a canonical CF preset (see `docs/cfs_canonicos.md`)
+- `--cf_index` loads a canonical CF preset by 1-based index (see `--list_cfs`)
+- `--list_cfs` prints canonical CF presets and exits
 - `--cp_disposition` accepts `above` or `below`
+- `--random_top_k K` chooses one solution uniformly at random from the top `K` ranked results
+- `--random_seed N` makes that random choice reproducible
 - `--species 2` currently generates exactly 2 voices: CF + CP
 - `--export_midi` and `--open_score` work for both species routes
+
+#### Generate 3rd-Species Counterpoint from an Explicit CF
+
+```bash
+python3 generate_counterpoint.py --species 3 --cf 0,2,4,5 --cp_disposition above
+```
+
+Notes:
+
+- same `--cf` and `--cp_disposition` semantics as species 2
+- `--random_top_k` / `--random_seed` behave the same as in species 2
+- output table shows `CP beat1..beat4`
+- final bar is shown as a collapsed long final (`beat2..beat4` as rest/empty)
 
 #### Generate 2nd-Species Counterpoint from an Auto-Generated CF
 
 ```bash
 python3 generate_counterpoint.py --species 2 --modo D --length 6 --cp_disposition below
+```
+
+#### Generate 3rd-Species Counterpoint from an Auto-Generated CF
+
+```bash
+python3 generate_counterpoint.py --species 3 --modo D --length 6 --cp_disposition below
 ```
 
 In this mode, the script generates several candidate cantus firmi with the legacy engine, tries them automatically against the new `src/species/` engine, and keeps the first CF that admits a valid 2nd-species line. If the quick passes fail, it widens the CF search automatically before giving up.
@@ -154,7 +180,6 @@ is_valid = cp_node.check_note(next_note)
 
 - ⏳ Parallel fifths/octaves (vs. direct)
 - ⏳ Mandatory consonance on each beat (1st species)
-- ⏳ 3rd-species rhythmic and dissonance handling
 - ⏳ Suspensions (4th species)
 - ⏳ Mixed note values (5th species)
 
@@ -177,6 +202,12 @@ python3 -m unittest tests.species.test_second_species_engine tests.species.test_
 ```
 
 Second-species engine validation, search, ranking, and CLI integration suite.
+
+```bash
+python3 -m unittest tests.species.test_third_species_engine
+```
+
+Third-species engine validation, search, ranking, and doctrinal figure recognition suite.
 
 ## Roadmap
 
