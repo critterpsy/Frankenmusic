@@ -1,91 +1,112 @@
-# Contrapunto 3ª especie (Jeppesen) - Mapa de reglas para Frankenmusic
+# LEGACY — Contrapunto 3ª especie (Jeppesen) — Motor Frankenmusic
 
-Este documento describe reglas de Jeppesen para contrapunto de 3ª especie (cuatro negras sobre una blanca) para motor.
+> Estado: **legacy** desde **2026-03-30**.
+> Canon vigente para implementación: [`/third_species.md`](../third_species.md).
+> Este archivo se conserva solo como referencia histórica de la versión `v1`.
 
-## 1. Objetivo
-- Generación y validación de contrapunto 3ª especie con dos voces.
-- Garantizar consonancias en fuertes y disonancias con preparación en débiles.
-- Mantener articulación melódica y evitar anomalías.
+Este documento separa explícitamente:
 
-## 2. Posiciones de pulso y duraciones
-- C. F. (cantus firmus) en blancas.
-- Contrapunto en negras: t0, t1, t2, t3 dentro de cada compás.
-- Fuerza: t0 y t2 son fuertes; t1 y t3 débiles.
+- **Doctrina jeppeseniana operable**
+- **Restricciones de implementación v1**
 
-## 3. Reglas de intervalos
-- Fuerte (t0,t2): consonantes estrictas: P1, m3, M3, P5, m6, M6, P8.
-- Débil (t1,t3): disonancias permitidas con preparación/resolución:
-  - notas de paso (2,7) o suspensiones enlazadas.
-- No disonancias en dos tiempos fuertes consecutivos.
+## API pública
 
-## 4. Reglas disonancias 3ª especie (Jeppesen)
-- Dissonancia en tiempo débil debe ser:
-  - paso por grado conjuncto (2ª o 7ª) o suspensión prolongada.
-  - preparada por consonancia (tiempo previo t0 o t2).
-  - resuelta por paso en t2 o t0 siguiente.
-- `notas_de_paso` o `vecindad` se representan en t1 o t3.
+- `validate_third_species(cf, cp, config=None)`
+- `search_third_species(cf, config=None)`
+- `rank_third_species_solution(cf, cp, config=None)`
 
-## 5. Movimiento y paralelas
-- Paralelas de 5ª/8ª prohibidas entre fuertes adyacentes: (t0,t2), (t2,t0 siguiente) y entre fuertes y débiles si generan effecto paralelo inmediato.
-- Contrario > oblicuo > similar en fuertes.
-- En débiles, el movimiento puede ser paso contiguo (conjunctus) libre.
+Representación:
 
-## 6. Saltos de voz
-- Pasos cortos en contrapunto negro preferibles.
-- Saltos mayores a 5ª deben compensarse con paso contrario directo.
-- No más de un salto mayor a 5ª por compás salvo excepciones muy controladas.
+- `ThirdSpeciesMeasure(beat1, beat2, beat3, beat4)`
+- `ThirdSpeciesLine(measures=[...])`
+- Grid canónico del cuerpo: `4*N - 3` slots.
+- Compás final colapsado a nota larga final (`beat2/beat3/beat4 = None`).
+- Apertura doctrinal opcional con `quarter rest` en `beat1` del primer compás (`allow_half_rest_start=True`).
 
-## 7. Reglas de cadencia
-- En la última blanca:
-  - t0 final debe ser la tónica (consonante perfecta 8va/u1).
-  - Entrada a t0 final: V->I, IV->I o I->V->I (si se extiende).
-- Resolver sensible en la voz superior hacia tónica.
+## Doctrina jeppeseniana implementada
 
-## 8. Pseudocódigo
-```python
-CONSONANT = {'P1','m3','M3','P5','m6','M6','P8'}
-DISSONANT_WEAK = {'m2','M2','m7','M7'}
+### Métrica y consonancia
 
-def is_strong(i):
-    return i % 2 == 0
+- `beat1` y `beat3` deben ser consonantes.
+- `beat2` y `beat4` pueden ser consonantes o disonantes.
+- Disonancias solo en `beat2` o `beat4`.
 
-for t in range(len(cantus)):
-    base = cantus[t]
-    for offset in range(4):
-        idx = t*4 + offset
-        cp = contrapunto[idx]
-        i = interval(cp, base)
+### Figuras disonantes permitidas
 
-        if is_strong(offset):
-            if i not in CONSONANT:
-                reject('fuerte no consonante')
-        else:
-            if i not in CONSONANT:
-                if i not in DISSONANT_WEAK:
-                    reject('dissonancia debil no permitida')
-                prev = interval(contrapunto[idx-1], base)
-                next = interval(contrapunto[idx+1], base)
-                if prev not in CONSONANT or next not in CONSONANT:
-                    reject('disonancia sin preparación/resolución')
-                if not is_step(cp, contrapunto[idx+1]):
-                    reject('disonancia no resuelta por paso')
+Solo se aceptan estas tres clases:
 
-# parametros de direccion y paralelas
-check_parallel_5_8(...)
-check_cadence(...)
-```
+1. `passing tone`
+2. `lower neighbor`
+3. `cambiata` (forma canónica descendente)
 
-## 9. Casos de prueba
-- CP: G4 F4 E4 D4 contra CF: C3 (t0,t1,t2,t3) correspond. Debe pasar si C3->G4 (P5), etc.
-- Disonancia válida: CF C, CP E D C B sobre tiempos (f,d,f,d) con preparación/resolución.
-- Paralelas: detecta C-G en t0 + D-A en t2, reject (5ª paralela con mismo direction).
+No se admite:
 
-## 10. Checklist
-- [ ] Tiempos fuertes consonantes
-- [ ] Dissonancias débiles solo 2/7 con preparación y resolución
-- [ ] No paralelas 5/8 en eventos relevantes
-- [ ] Cadencia final correcta
-- [ ] Rango y saltos
+- `upper neighbor` disonante
+- semántica de 4ª especie (ligaduras/suspensiones)
 
----
-> Basado en Jeppesen: 3ª especie mantiene el “carácter de flujo” de la melodía, usando disonancias móviles mediante notas de paso y suspensiones ligadas con naturalezas tonales.
+### Unísono y repeticiones
+
+- Unísono prohibido en `beat1` interior.
+- Unísono permitido en cuartos no iniciales si no rompe independencia.
+- Repeticiones inmediatas: error duro.
+- Repetición trivial `beat2 == beat4`: error duro.
+- Reutilizar la misma nota de lower-neighbor dos veces seguidas: error duro.
+- Otras reiteraciones no inmediatas: degradación estilística en ranking.
+
+### Cadencia
+
+- Último ataque: `P1` o `P8` con el CF.
+- Aproximación final por paso.
+- Subtónica cadencial obligatoria (semitono, o tono en frigio).
+
+## Reglas formales de figuras (operables)
+
+### Passing Tone
+
+Ventana mínima: `strong_prev, weak, strong_next`
+
+- `weak` en `beat2` o `beat4`
+- `weak` disonante
+- `strong_prev` y `strong_next` consonantes
+- entrada por paso, salida por paso
+- misma dirección en entrada y salida
+
+### Lower Neighbor
+
+Ventana mínima: `strong_prev, weak, strong_next`
+
+- `weak` en `beat2` o `beat4`
+- `weak` disonante
+- `strong_prev == strong_next`
+- `weak` un grado por debajo de `strong_prev`
+- entrada/salida por paso en direcciones opuestas
+
+### Cambiata (nota cambiata)
+
+Ventana mínima: `n1, n2, n3, n4, n5`
+
+- `n2` única disonancia de la figura
+- `n2` en `beat2` o `beat4`
+- `n1, n3, n4, n5` consonantes en sus posiciones
+- `n1 -> n2`: paso
+- `n2 -> n3`: salto de tercera en la misma dirección
+- `n3 -> n4 -> n5`: dos pasos en dirección opuesta
+- se reconoce también al cruzar barra
+- v1 acepta solo forma canónica descendente
+
+## Restricciones v1 (no declarar como doctrina)
+
+- Solver dedicado por compás con pruning local y validación global; no cubre todavía todas las variantes rítmicas editoriales del penúltimo compás reportadas en otras síntesis.
+- El compás final se mantiene colapsado por diseño de representación.
+- La ruta CLI principal sigue priorizando especie 1 y 2; la especie 3 está expuesta y probada a nivel de API/engine.
+
+## Tests mínimos implementados
+
+- `cambiata` válida
+- casi-`cambiata` inválida
+- apertura con `quarter-rest` inicial
+- unísono permitido en cuarto no inicial
+- unísono inválido en `beat1` interior
+- repetición trivial `beat2 == beat4` rechazada
+- reutilización de same lower-neighbor rechazada
+- reiteración no trivial conservada y penalizada en ranking

@@ -1,4 +1,8 @@
-# Dump completo — Reglas de todas las especies (Jeppesen / Frankenmusic)
+# LEGACY — Dump completo — Reglas de todas las especies (Jeppesen / Frankenmusic)
+
+> Estado: **legacy** desde **2026-03-30**.
+> Para implementación de **3ª especie**, usar como canon [`/third_species.md`](../third_species.md).
+> Este dump no debe usarse como fuente normativa principal para nuevas reglas.
 
 > Compilación de `especie1.md` a `especie5.md` y `jeppesen_contrapunto_reglas.md`. Fuente única para referencia del motor.
 

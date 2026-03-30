@@ -1,4 +1,8 @@
-# Mapa de reglas de Jeppesen para contrapunto de especies (motor Frankenmusic)
+# LEGACY — Mapa de reglas de Jeppesen para contrapunto de especies (motor Frankenmusic)
+
+> Estado: **legacy** desde **2026-03-30**.
+> Para **3ª especie**, el canon vigente es [`/third_species.md`](../third_species.md).
+> Este documento permanece como compendio histórico general.
 
 > Este documento recoge reglas de contrapunto derivadas de Knud Jeppesen (Counterpoint) adaptadas a un motor de generación. No se inventa contenido; se basa en los principios aceptados de contrapunto species (1–5) según Jeppesen y fuentes clásicas complementarias.
 

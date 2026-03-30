@@ -47,12 +47,17 @@ Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian — including pla
 │   ├── cfs_canonicos.md     # Presets de cantus firmus reutilizables desde CLI
 │   ├── jeppesen_contrapunto_reglas.md
 │   └── jeppesen_contrapunto_especieN.md
+├── third_species.md         # Canon vigente para 3rd species (Jeppesen strict 4:1)
 ├── notebooks/               # Interactive examples
 │   └── play.ipynb
 ├── output/
 │   └── midis/               # Generated MIDI files
 └── README.md
 ```
+
+### Canonical Rule Source (3rd Species)
+- Canon vigente: `third_species.md`
+- Legacy docs kept for history only: `docs/jeppesen_contrapunto_especie3.md`, `docs/jeppesen_contrapunto_reglas.md`, `docs/dump_especies.md`
 
 ## Usage
 
