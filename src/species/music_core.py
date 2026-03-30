@@ -102,6 +102,14 @@ def is_white_note(note: int) -> bool:
     return Note.is_white(note)
 
 
+def is_cadential_subtonic(note: int, final_note: int, tonic: int) -> bool:
+    return note == final_note - cadential_subtonic_distance(tonic)
+
+
+def same_diatonic_pitch(note1: int, note2: int) -> bool:
+    return Note.Diatonic.equals(Note.Diatonic.index(note1), Note.Diatonic.index(note2))
+
+
 def cadential_subtonic_distance(tonic: int) -> int:
     """Chromatic distance from cadential subtonic to tonic.
 

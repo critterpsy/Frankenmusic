@@ -8,6 +8,7 @@ CPNote = int | None
 
 RuleOrigin = Literal[
     "second_species_exact",
+    "third_species_exact",
     "inherited_first_species",
     "ranking_heuristic",
 ]
@@ -30,6 +31,35 @@ class SecondSpeciesLine:
                 notes.append(measure.beat1)
             if measure.beat2 is not None:
                 notes.append(measure.beat2)
+        return notes
+
+
+@dataclass(frozen=True)
+class ThirdSpeciesMeasure:
+    beat1: CPNote
+    beat2: CPNote
+    beat3: CPNote
+    beat4: CPNote
+
+
+@dataclass(frozen=True)
+class ThirdSpeciesLine:
+    measures: list[ThirdSpeciesMeasure]
+
+    def real_attacks(self) -> list[int]:
+        notes: list[int] = []
+        for measure_idx, measure in enumerate(self.measures, start=1):
+            if measure.beat1 is not None:
+                notes.append(measure.beat1)
+            is_final = measure_idx == len(self.measures)
+            if is_final:
+                continue
+            if measure.beat2 is not None:
+                notes.append(measure.beat2)
+            if measure.beat3 is not None:
+                notes.append(measure.beat3)
+            if measure.beat4 is not None:
+                notes.append(measure.beat4)
         return notes
 
 
@@ -121,7 +151,7 @@ class ScoreBreakdown:
 
 @dataclass(frozen=True)
 class RankedSolution:
-    cp: SecondSpeciesLine
+    cp: SecondSpeciesLine | ThirdSpeciesLine
     score: ScoreBreakdown
     validation: ValidationReport
 

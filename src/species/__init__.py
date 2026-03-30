@@ -1,7 +1,10 @@
 from .config import CPDisposition, SearchMode, SpeciesEngineConfig
 from .engine import (
+    rank_third_species_solution,
     rank_second_species_solution,
+    search_third_species,
     search_second_species,
+    validate_third_species,
     validate_second_species,
 )
 from .models import (
@@ -15,6 +18,8 @@ from .models import (
     SecondSpeciesMeasure,
     TemporalGrid,
     TextureState,
+    ThirdSpeciesLine,
+    ThirdSpeciesMeasure,
     ValidationError,
     ValidationReport,
 )
@@ -27,6 +32,8 @@ __all__ = [
     "TemporalGrid",
     "SecondSpeciesMeasure",
     "SecondSpeciesLine",
+    "ThirdSpeciesMeasure",
+    "ThirdSpeciesLine",
     "LineState",
     "TextureState",
     "CadentialContext",
@@ -36,6 +43,9 @@ __all__ = [
     "RankedSolution",
     "RankedSolutions",
     "validate_second_species",
+    "validate_third_species",
     "search_second_species",
+    "search_third_species",
     "rank_second_species_solution",
+    "rank_third_species_solution",
 ]
