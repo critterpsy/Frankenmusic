@@ -1,9 +1,0 @@
-{
-    "python.pythonPath": "/home/critter/.virtualenvs/Frankenstein/bin/python",
-    "python.linting.pylintEnabled": false,
-    "python.linting.flake8Enabled": true,
-    "python.linting.enabled": true,
-    "python.jediEnabled": true,
-    "python.jediPath": "/home/netopaas/.virtualenvs/Frankenstein/src/jedi",
-    "python.languageServer": "Jedi",
-}
